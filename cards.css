@@ -1,0 +1,211 @@
+/* Rebound: the look of an augment card.
+   This file and augCard() in ui.js are the only two places that define an augment card. Restyle here.
+   One card design serves both places it appears: owned sockets (li.aug) and shop offers (div.offer). Both also carry .acard.
+   Keep the class names and ids that augCard() writes (they are listed in its comment), because game features attach to them.
+
+   The card is a metal pill, 96px tall, with fully round ends:
+     .ac-art     the art circle in the left end: the augment's icon, or its first letter until art exists
+     .ac-plate   the dark recessed plate that carries all text, so keyword colours stay readable on any metal
+     .ac-fx      a clipped layer for the hover shine, the Epic texture and the Legendary sweep
+     .ac-frame   only when a frame picture is set (assets.images.cardFrames): it replaces the built-in metal, plate and art ring.
+                 Everything for framed cards is in the last section of this file.
+
+   What arrives from the game:
+     --rc              the rarity tint (name, glow), set by .c0 to .c4 from rarities[].color
+     --ma --mb --mc    the rarity metal: highlight, main tone, shadow, from rarities[].metal
+     --card-frame      the frame picture, when one is set
+     --mx --my         where the pointer is on the card, in px on a 3 px grid (ui.js sets them while hovering)
+     .tilting          added while the pointer is over the card; ui.js also sets the 3D transform itself
+     .on               added for a moment when the augment triggers in a fight
+     .off .sold        disabled by a boss / already bought
+     .arming           the "Sell for $X?" button is showing
+     .dragging .selling .drop-above .drop-below   drag states (shop only)
+
+   Motion rule: animate only transform and opacity, on .ac-fx and on pseudo-elements. style.css switches every animation off
+   for reduced motion unless <html> has .force-motion, which leaves the static glow. */
+
+/* ----- rarity colours ----- */
+.c0{--rc:var(--c0);--ma:var(--m0a);--mb:var(--m0b);--mc:var(--m0c)}
+.c1{--rc:var(--c1);--ma:var(--m1a);--mb:var(--m1b);--mc:var(--m1c)}
+.c2{--rc:var(--c2);--ma:var(--m2a);--mb:var(--m2b);--mc:var(--m2c)}
+.c3{--rc:var(--c3);--ma:var(--m3a);--mb:var(--m3b);--mc:var(--m3c)}
+.c4{--rc:var(--c4);--ma:var(--m4a);--mb:var(--m4b);--mc:var(--m4c)}
+
+/* ----- the pill ----- */
+.augs,.offers{gap:10px}
+.acard{--h:96px;--art:76px;--edge:6px;
+  position:relative;box-sizing:border-box;height:var(--h);border-radius:calc(var(--h)/2);
+  display:flex;align-items:center;gap:7px;padding:0 var(--edge) 0 8px;
+  border:2px solid var(--drop);color:var(--chalk);
+  /* brushed grain over a chrome sheen */
+  background:
+    repeating-linear-gradient(91deg,#ffffff14 0 1px,transparent 1px 3px,#0000000f 3px 4px,transparent 4px 7px),
+    linear-gradient(180deg,var(--ma) 0%,var(--mb) 24%,var(--mc) 49%,var(--mb) 57%,var(--ma) 84%,var(--mb) 100%);
+  box-shadow:0 3px 0 var(--drop),inset 0 1px 0 #ffffffa6,inset 0 -2px 3px #00000059;
+  transition:transform .25s cubic-bezier(.2,.8,.3,1);will-change:transform}
+.acard:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+
+/* art circle */
+.ac-art{position:relative;z-index:1;flex:none;width:var(--art);height:var(--art);border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 28%,var(--ma) 0%,var(--mb) 46%,var(--mc) 100%);
+  box-shadow:inset 0 0 0 2px #0000005c,inset 0 4px 6px #ffffff73,inset 0 -5px 8px #00000059,0 1px 0 #ffffff80}
+.ac-glyph{font-family:var(--display);font-style:normal;font-size:var(--dpx,32.68px);line-height:1;color:#0000008c;text-shadow:0 1px 0 #ffffff80;user-select:none}
+.ac-art .icon{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.ord{position:absolute;left:-3px;top:-1px;min-width:21px;height:21px;padding:0 4px;box-sizing:border-box;border-radius:11px;display:grid;place-items:center;
+  background:var(--ink);border:2px solid var(--drop);color:var(--chalk);font-family:var(--body);font-size:var(--bfs,13.333px);line-height:1}
+
+/* text plate */
+.ac-plate{position:relative;z-index:1;flex:1;min-width:0;align-self:stretch;margin:var(--edge) 0;box-sizing:border-box;
+  display:flex;align-items:center;gap:6px;padding:0 40px 0 10px;
+  border-radius:14px calc(var(--h)/2 - var(--edge) - 2px) calc(var(--h)/2 - var(--edge) - 2px) 14px;
+  background:var(--ink);background:color-mix(in srgb,var(--ink) 93%,var(--rc));
+  box-shadow:inset 0 2px 5px #000000d9,inset 0 0 0 1px #00000080,0 1px 0 #ffffff66}
+.offer .ac-plate{padding-right:11px}
+.ac-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.aug-h{display:flex;align-items:baseline;gap:8px;min-width:0}
+.ac-name{font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);line-height:1.15;color:var(--rc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{margin-left:auto;flex:none;font-size:var(--bfs,13.333px);font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ac-text{margin:0;font-size:var(--bfs,13.333px);line-height:1.28;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.tags{display:flex;align-items:baseline;gap:7px;min-width:0;font-size:var(--bfs,13.333px);line-height:1.3;font-weight:700;letter-spacing:0;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden}
+.tags .tg{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* notes such as "Currently +2 Power": the tags give way before a note does */
+.tags em{flex:none;font-style:normal;font-size:var(--bfs,13.333px);letter-spacing:0;text-transform:none;color:var(--gold)}
+.ac-clip[data-tip]{cursor:help}
+
+/* shop: round Buy button in the right end */
+.acard .buy{flex:none;width:58px;height:58px;padding:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1;white-space:normal}
+.acard .buy small{font-size:var(--bfs,13.333px);font-weight:700;letter-spacing:0;text-transform:uppercase}
+.acard .buy b{font-family:var(--body);font-weight:400;font-size:calc(var(--bfs,13.333px)*2)}
+
+/* owned: arrow buttons stay for keyboards, hidden until the card or something in it has focus */
+.aug-a{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;opacity:0;pointer-events:none}
+.aug-a button{width:26px;height:26px;padding:0;font-size:var(--bfs,13.333px);line-height:1;border-radius:50%;box-shadow:0 2px 0 var(--drop)}
+.acard:focus-within .aug-a{opacity:1;pointer-events:auto}
+.acard.arming .aug-a{opacity:0;pointer-events:none}
+.sellq{position:absolute;right:6px;top:50%;transform:translateY(-50%);z-index:3;white-space:nowrap;padding:6px 12px;border-radius:99px;background:var(--mult);color:var(--ink);font-weight:700;font-size:var(--bfs,13.333px)}
+.sellq:active:not(:disabled){transform:translateY(calc(-50% + 2px))}
+
+/* states */
+.aug.off{filter:grayscale(.85) brightness(.75);opacity:.6}
+.acard.sold{filter:grayscale(.7);opacity:.5}
+.aug.on{box-shadow:0 0 0 3px var(--gold),0 3px 0 var(--drop);transform:translateX(3px)}
+.aug.empty{box-sizing:border-box;height:96px;border-radius:48px;display:flex;align-items:center;gap:12px;padding:0 0 0 8px;
+  border:2px dashed var(--line);background:transparent;color:var(--dim);font-size:var(--bfs,13.333px)}
+.aug.empty .ord{font-family:var(--body);position:static;flex:none;width:76px;height:76px;min-width:0;padding:0;border-radius:50%;border:2px dashed var(--line);background:transparent;color:var(--dim);font-size:calc(var(--bfs,13.333px)*2)}
+
+
+/* ----- hover: lift, tilt and a shine that follows the pointer (numbers in rules.feel.cardTilt) ----- */
+.acard.tilting{transition:transform .08s linear;z-index:3;box-shadow:0 10px 0 -3px var(--drop),0 16px 20px #00000070,inset 0 1px 0 #ffffffa6,inset 0 -2px 3px #00000059}
+.ac-fx{position:absolute;inset:-2px;z-index:2;border-radius:inherit;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .2s ease;
+  background:radial-gradient(150px circle at var(--mx,50%) var(--my,50%),#ffffff33,#ffffff0f 45%,transparent 70%)}
+.acard.tilting .ac-fx{opacity:1}
+/* clip-path, not just overflow + border-radius: browsers drop the rounded clip for animated layers, which let the textures show past the round ends */
+.ac-fx{clip-path:inset(0 round calc(var(--h)/2))}
+
+/* ----- Epic and Legendary: a glow at all times, stronger on hover, plus a moving texture ----- */
+.acard::before{content:"";position:absolute;inset:-2px;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s ease;box-shadow:0 0 13px 2px var(--rc)}
+.c3::before{opacity:.42} .c4::before{opacity:.5}
+.c3.tilting::before,.c4.tilting::before{opacity:1}
+.acard.sold::before,.aug.off::before{opacity:0}
+
+/* Epic: a slow violet swirl */
+.c3 .ac-fx::before{content:"";position:absolute;left:50%;top:50%;width:520px;height:520px;margin:-260px 0 0 -260px;opacity:.3;mix-blend-mode:screen;
+  background:repeating-conic-gradient(from 0deg,transparent 0deg,color-mix(in srgb,var(--rc) 50%,transparent) 9deg,transparent 22deg,transparent 36deg)}
+.c3.tilting .ac-fx::before{animation:acSwirl 5s linear infinite}
+@keyframes acSwirl{to{transform:rotate(36deg)}}   /* one step of the pattern, so the loop is seamless */
+
+/* Legendary: a drifting shimmer, and a diagonal shine that crosses the card every 3 seconds while the pointer stays */
+.c4 .ac-fx::before{content:"";position:absolute;inset:0 -56px;opacity:.24;mix-blend-mode:screen;
+  background:repeating-linear-gradient(115deg,transparent 0 21px,color-mix(in srgb,var(--ma) 70%,transparent) 24px,transparent 28px)}
+.c4.tilting .ac-fx::before{animation:acShimmer 2.6s linear infinite}
+@keyframes acShimmer{to{transform:translateX(30.9px)}}   /* one stripe step along x (28px / sin 65deg), so the loop is seamless */
+.c4 .ac-fx::after{content:"";position:absolute;top:-10%;bottom:-10%;left:0;width:30%;opacity:0;transform:translateX(-140%) skewX(-20deg);
+  background:linear-gradient(90deg,transparent,#fff6c880 40%,#ffffffbf 50%,#fff6c880 60%,transparent)}
+.c4.tilting .ac-fx::after{animation:acSweep 3s ease-in-out infinite}
+@keyframes acSweep{0%{transform:translateX(-140%) skewX(-20deg);opacity:1}32%{transform:translateX(480%) skewX(-20deg);opacity:1}33%,100%{transform:translateX(480%) skewX(-20deg);opacity:0}}
+
+/* ----- drag to reorder, and drag to the needle to sell (shop only) ----- */
+.aug[data-drag]{cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.grip{flex:none;width:12px;height:32px;opacity:.6;touch-action:none;cursor:grab;
+  background:radial-gradient(circle,var(--dim) 1.4px,transparent 1.7px) 0 0/6px 6.4px}
+.aug.dragging{z-index:5;cursor:grabbing;transition:none;box-shadow:0 0 0 2px var(--gold),0 10px 0 var(--drop);opacity:.97}
+.aug.selling{box-shadow:0 0 0 2px var(--mult),0 0 18px var(--mult);opacity:.9}
+.aug.drop-above::after,.aug.drop-below::after{content:"";position:absolute;left:26px;right:26px;height:3px;border-radius:2px;background:var(--gold)}
+.aug.drop-above::after{top:-9px} .aug.drop-below::after{bottom:-9px}
+body.drag-active{cursor:grabbing} body.drag-active .aug[data-drag]{cursor:grabbing}
+
+/* ----- narrow phones ----- */
+@media (max-width:480px){
+  .acard{--art:64px;gap:6px;padding-left:14px}
+  .ac-plate{padding-left:8px;padding-right:34px}
+  .offer .ac-plate{padding-right:9px}
+  .acard .buy{width:48px;height:48px} .acard .buy b{font-size:var(--bfs,13.333px)} .acard .buy small{font-size:var(--bfs,13.333px)}
+  /* three lines of text here, where the plate is narrow */
+  .ac-name{font-size:var(--bfs,13.333px)} .ac-text{font-size:var(--bfs,13.333px);line-height:1.25;-webkit-line-clamp:3;line-clamp:3}
+  .ac-body{gap:1px}
+  .ac-glyph{font-size:var(--dpx,32.68px)}
+  .aug.empty .ord{width:64px;height:64px;margin-left:6px}
+}
+
+/* ===== frame pictures (assets.images.cardFrames, measured by assets.cardFrameLayout) =====
+   The shipped frames are pixel art: 76 x 32 pixels, shown at 3 screen px per pixel. The picture carries the metal, the dark
+   text plate and the socket for the art, so the CSS metal, plate and ring are switched off here. ui.js passes the measurements:
+     --fsl --fsr        widths that never stretch, left and right (--fsln --fsrn: the same in picture pixels, for the slice)
+     --fax --fay --fas  the art circle's left, top and diameter
+     --fpl --fpt        where the text starts, and the plate's inset from top and bottom
+     --fec              distance from the right edge to the centre of the right round end (Buy button, arrows)
+   Effects keep to the pixel look: the shine is stepped rings that move on a 3 px grid, outlines are 3 px pixel outlines
+   (stacked drop-shadows follow the picture's own edge), and the Epic and Legendary textures are tiny pixel tiles that move in steps. */
+.acard.framed{border:0;background:none;box-shadow:none;padding:0;gap:0}
+.acard.framed.tilting{box-shadow:none}
+.ac-frame{position:absolute;inset:0;box-sizing:border-box;pointer-events:none;
+  border-style:solid;border-color:transparent;border-width:0 var(--fsr,48px) 0 var(--fsl,48px);
+  border-image-source:var(--card-frame);border-image-slice:0 var(--fsrn,96) 0 var(--fsln,96) fill;border-image-repeat:stretch;
+  image-rendering:pixelated;filter:drop-shadow(0 3px 0 var(--drop))}
+.framed .ac-art{position:absolute;left:var(--fax,10px);top:var(--fay,10px);width:var(--fas,76px);height:var(--fas,76px);background:none;box-shadow:none}
+.framed .ac-art .icon{image-rendering:pixelated;border-radius:0}   /* augment art is pixel art: 20 x 20 shown 3x; its own transparent corners make the circle */
+.framed .ac-glyph{font-size:var(--dpx,32.68px);color:var(--rc);opacity:.6;text-shadow:0 3px 0 #000}
+.framed .ac-plate{margin:var(--fpt,6px) 0 var(--fpt,6px) var(--fpl,96px);padding:0 calc(var(--fec,48px) - 8px) 0 6px;background:none;box-shadow:none;border-radius:0}
+.framed.offer .ac-plate{padding-right:calc(var(--fec,48px) - 29px)}
+.framed .aug-a{right:calc(var(--fec,48px) - 13px)}
+.framed .sellq{right:12px}
+.framed::before{inset:0}
+
+/* hover shine: stepped rings instead of a smooth fade */
+.framed .ac-fx{inset:0;container-type:inline-size;clip-path:inset(3px round calc(var(--h)/2 - 3px));   /* stays inside the 3 px black outline */
+  
+  background:radial-gradient(circle at var(--mx,50%) var(--my,50%),#ffffff2b 0 27px,#ffffff17 27px 51px,#ffffff0a 51px 75px,transparent 75px)}
+
+/* pixel outlines for the trigger flash, dragging and the needle */
+.framed.tilting .ac-frame{filter:drop-shadow(0 6px 0 var(--drop)) drop-shadow(0 12px 9px #00000070)}
+.framed.aug.on,.framed.aug.dragging,.framed.aug.selling{box-shadow:none}
+.framed.aug.on .ac-frame,.framed.aug.dragging .ac-frame{filter:drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)) drop-shadow(0 6px 0 var(--drop))}
+.framed.aug.selling .ac-frame{filter:drop-shadow(3px 0 0 var(--mult)) drop-shadow(-3px 0 0 var(--mult)) drop-shadow(0 3px 0 var(--mult)) drop-shadow(0 -3px 0 var(--mult)) drop-shadow(0 0 9px var(--mult))}
+
+/* Epic: violet pixel sparkles drifting up and to the right while hovered */
+.framed.c3 .ac-fx::before{inset:0 0 -72px -72px;width:auto;height:auto;margin:0;opacity:.55;mix-blend-mode:screen;
+  background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAY0lEQVR42mNgGAX0BB/u/L9DUNH/D//raeaC/x/+1///8P8/zS0ZjezBC15f+r9gNBRIBs9O4E/WTLR2AAsVXN7w7MR/BgYGBgYpC8bG4RdEgwP8////2cjLH3f2/T8xPHwCAD1KLXbqxMdVAAAAAElFTkSuQmCC) 0 0/72px 72px;image-rendering:pixelated}
+.framed.c3.tilting .ac-fx::before{animation:acSparkPx 4.8s steps(24) infinite}
+@keyframes acSparkPx{to{transform:translate(72px,-72px)}}   /* one tile, 3 px per step, so the loop is seamless */
+
+/* Legendary: stepped gold stripes drifting, and a pixel shine that crosses the card every 3 seconds while hovered */
+.framed.c4 .ac-fx::before{inset:0 0 0 -48px;opacity:.26;mix-blend-mode:screen;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAgCAYAAAAbifjMAAAAZ0lEQVR42sWVwQ0AIQgEua3a68YC7QE/+rycsuiSkPCbgQQwb9VHFgsEjA2G7q16ikEhzHmDJ0of5cvPINr7nB2k9LsGXzsDKf2Owd+9gJR+1mD1VkJKP2Ow+ycgpecaRH8kpPQUgw5rgpt+XDQwHwAAAABJRU5ErkJggg==) 0 0/48px 96px;image-rendering:pixelated}
+.framed.c4.tilting .ac-fx::before{animation:acShimmerPx 2.4s steps(16) infinite}
+@keyframes acShimmerPx{to{transform:translateX(48px)}}   /* one tile, 3 px per step */
+.framed.c4 .ac-fx::after{top:0;bottom:0;left:0;width:42px;transform:translateX(-48px);opacity:0;
+  background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAgCAYAAAAi7kmXAAAAWklEQVR42mNkwAP+/7pzAkXg16NJjDxOy/5/OzGNiYFMQH+NeP2Hgr/si2JgYGD4/+3EtIFxKhNd/TfU/UiM/4ayH4n131D1Iyn+G4p+JNV/Q82P5PhviPkRAM1cnEPrK+TNAAAAAElFTkSuQmCC) 0 0/42px 96px no-repeat;image-rendering:pixelated}
+.framed.c4.tilting .ac-fx::after{animation:acSweepPx 3s infinite}
+@keyframes acSweepPx{
+  0%{transform:translateX(-48px);opacity:1;animation-timing-function:steps(32)}
+  34%{transform:translateX(calc(100cqw + 6px));opacity:1}
+  35%,100%{transform:translateX(calc(100cqw + 6px));opacity:0}}
+
+/* pixel fonts: whole-pixel line heights, so name, two lines of text and the tags fit the 72 px plate */
+.framed .ac-body{gap:1px}
+.framed .ac-name{line-height:1}
+.framed .ac-text,.framed .tags{line-height:calc(var(--bfs,13.333px)*1.2)}
+
+@media (max-width:480px){
+  .framed.offer .ac-plate{padding-right:calc(var(--fec,48px) - 24px)}
+  .framed .ac-text{-webkit-line-clamp:2;line-clamp:2}
+}

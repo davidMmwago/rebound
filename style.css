@@ -1,0 +1,245 @@
+:root{
+  /* Layout: square arena on the left, one scrolling column of sticker cards on the right. Balloon display type, hard drop shadows, one dark world.
+     These are only defaults. At start-up ui.js overwrites the colors and fonts with the values in game-data.json (theme.page, theme.fonts, rarities). */
+  --ink:#15101c; --felt:#1f172d; --panel:#271e38; --panel2:#33284c; --line:#46386395; --chalk:#f6f0e4; --dim:#b3a8c7;
+  --pow:#3ddbd0; --mult:#ff5d73; --gold:#ffd23f; --accent:#ff8a3d; --drop:#0b0810;
+  --c0:#d3d7e0; --c1:#8ee7f3; --c2:#ffa78e; --c3:#c6a0ff; --c4:#ffd34d;
+  --display:"Pixel Game","Arial Black",system-ui,sans-serif;
+  --body:"Alpha Beta BRK",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --dpx:32.68px; --bfs:13.333px;   /* title text size and body text size: theme.fonts.displaySize and bodySize */
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--ink);color:var(--chalk);font-family:var(--body);font-size:var(--bfs,13.333px);line-height:1.35}
+body{background-image:radial-gradient(circle at 1px 1px,#ffffff0a 1px,transparent 1.5px);background-size:22px 22px}
+button{font:inherit;color:var(--chalk);background:var(--panel2);border:2px solid var(--drop);border-radius:10px;padding:5px 11px;cursor:pointer;box-shadow:0 3px 0 var(--drop);font-weight:600;transition:transform .06s,box-shadow .06s}
+button:hover:not(:disabled){filter:brightness(1.12)}
+button:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 var(--drop)}
+button:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance;letter-spacing:.01em}
+p{margin:0}
+b{font-weight:700}
+
+#app{display:flex;flex-direction:column;gap:12px;padding:12px 16px 16px;max-width:1240px;margin:0 auto}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.logo{font-family:var(--display);font-size:var(--dpx,32.68px);line-height:1;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
+.logo i{width:22px;height:22px;border-radius:50%;background:var(--gold);border:2.5px solid #fff;box-shadow:0 3px 0 var(--drop);display:inline-block}
+.logo span{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;font-size:var(--bfs,13.333px);font-weight:600}
+.chips span{background:var(--panel);border:2px solid var(--drop);border-radius:99px;padding:2px 11px;font-variant-numeric:tabular-nums}
+.gold,.chips .gold{color:var(--gold)}
+.ctl{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:var(--bfs,13.333px)}
+.seg{display:flex}
+.seg button{border-radius:0;margin-left:-2px;min-width:38px;padding:5px 8px}
+.seg button:first-child{border-radius:10px 0 0 10px;margin-left:0}
+.seg button:last-child{border-radius:0 10px 10px 0}
+button[aria-pressed="true"]{background:var(--chalk);color:var(--ink)}
+
+main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-height:0}
+.stage{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0}
+.arena{position:relative;width:100%;aspect-ratio:1;border:4px solid var(--chalk);border-radius:6px;box-shadow:0 6px 0 var(--drop);background:var(--felt);overflow:hidden}
+#cv{display:block;width:100%;height:100%}
+.readout{display:flex;align-items:stretch;justify-content:center;gap:8px;font-family:var(--display);width:100%;max-width:560px}
+.readout .ro{flex:1;border:2px solid var(--drop);border-radius:12px;box-shadow:0 3px 0 var(--drop);padding:3px 10px 5px;text-align:center;color:var(--ink);min-width:0}
+.readout small{display:block;font-family:var(--body);font-size:var(--bfs,13.333px);font-weight:700;letter-spacing:0;text-transform:uppercase;opacity:.75}
+.readout b{font-weight:400;font-size:var(--dpx,32.68px);line-height:1.05;font-variant-numeric:tabular-nums;display:inline-block}
+.readout .pw{background:var(--pow)} .readout .ml{background:var(--mult)} .readout .dm{background:var(--chalk);flex:1.25}
+.readout>i{font-style:normal;font-size:var(--dpx,32.68px);align-self:center;color:var(--dim)}
+.readout.idle{opacity:.5}
+.bump{animation:bump .22s ease-out}
+@keyframes bump{from{transform:scale(1.35)}to{transform:scale(1)}}
+
+#side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:2px solid var(--drop);border-radius:14px;box-shadow:0 4px 0 var(--drop);padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.card h3{font-size:var(--dpx,32.68px);display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.card h3 span{font-family:var(--body);font-size:var(--bfs,13.333px);font-weight:500;color:var(--dim)}
+.eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:var(--bfs,13.333px);font-weight:700;letter-spacing:0;text-transform:uppercase;color:var(--dim)}
+.pips{display:flex;gap:5px}
+.pips i{width:11px;height:11px;border-radius:50%;border:2px solid var(--dim)}
+.pips i.done{background:var(--dim)} .pips i.now{background:var(--accent);border-color:var(--accent)} .pips i.boss{border-radius:2px;transform:rotate(45deg)}
+.next h2{font-size:var(--dpx,32.68px);line-height:1.15}
+.next.is-boss{background:linear-gradient(180deg,#3a2030,var(--panel) 70%)}
+.next.is-boss h2{color:var(--mult)}
+.rule{font-weight:600}
+.with{font-size:var(--bfs,13.333px);color:var(--dim)} .with b{color:var(--chalk)}
+.go{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);background:var(--accent);color:var(--ink);padding:7px 16px;border-radius:12px;letter-spacing:.03em}
+
+.hero h1{font-size:calc(var(--dpx,32.68px)*1.5);line-height:1.02;color:var(--gold)}
+.hero p{max-width:60ch;color:var(--chalk)}
+.best{color:var(--dim)!important;font-size:var(--bfs,13.333px)}
+.weapons{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:9px}
+.weapon{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 11px;font-weight:500;font-size:var(--bfs,13.333px);line-height:1.35}
+.weapon b{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);color:var(--gold)}
+.weapon .wstat{font-size:var(--bfs,13.333px);color:var(--dim);font-variant-numeric:tabular-nums}
+.weapon .wramp{font-size:var(--bfs,13.333px);color:var(--pow)}
+.how p{color:var(--dim)} .pw{color:var(--pow)} .ml{color:var(--mult)}
+
+.augs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.trophies{display:flex;flex-wrap:wrap;gap:6px}
+.trophies span{font-size:var(--bfs,13.333px);font-weight:600;border:2px solid var(--drop);background:var(--ink);border-radius:99px;padding:1px 9px;color:var(--gold)}
+.ramp{font-size:var(--bfs,13.333px);color:var(--dim)} .ramp b{color:var(--pow);text-transform:uppercase;font-size:var(--bfs,13.333px);letter-spacing:0;margin-right:4px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0}
+.stats.wide{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stats div{background:var(--ink);border-radius:8px;padding:4px 9px}
+.stats dt{font-size:var(--bfs,13.333px);font-weight:700;letter-spacing:0;text-transform:uppercase;color:var(--dim)}
+.stats dd{margin:0;font-family:var(--body);font-size:calc(var(--bfs,13.333px)*2);font-variant-numeric:tabular-nums}
+.hpbar{position:relative;height:24px;background:var(--ink);border:2px solid var(--drop);border-radius:99px;overflow:hidden}
+.hpbar i{position:absolute;inset:0 auto 0 0;width:100%;background:var(--gold);transition:width .12s linear}
+.hpbar b{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);color:var(--chalk);mix-blend-mode:difference;font-variant-numeric:tabular-nums}
+
+.offers{display:flex;flex-direction:column;gap:7px}
+.buy{background:var(--gold);color:var(--ink);font-weight:700;white-space:nowrap;padding:3px 11px;font-size:var(--bfs,13.333px)}
+.sold{opacity:.45}
+.tunes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.tune{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel2);border:2px solid var(--drop);border-radius:10px;padding:6px 9px}
+.tune b{display:block;font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);color:var(--pow)}
+.tune span{display:block;font-size:var(--bfs,13.333px);color:var(--dim);line-height:1.3}
+.shop-f{display:flex;align-items:center;gap:10px;font-size:var(--bfs,13.333px);color:var(--dim)}
+.shop-f button{white-space:nowrap}
+
+#overlay{position:absolute;inset:0;display:grid;place-items:center;background:#15101cc2;padding:14px}
+.sheet{width:min(100%,360px);max-height:100%;overflow:auto;background:var(--panel);border:3px solid var(--chalk);border-radius:16px;box-shadow:0 6px 0 var(--drop);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.sheet h2{font-size:var(--dpx,32.68px);line-height:1.1;color:var(--gold)}
+.pay{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-variant-numeric:tabular-nums}
+.pay li{display:flex;justify-content:space-between;gap:12px}
+.pay b{color:var(--gold);font-family:var(--display);font-weight:400}
+.pay .tot{border-top:2px dashed var(--line);margin-top:4px;padding-top:5px;font-size:var(--bfs,13.333px)}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.trophy-pick{display:flex;flex-direction:column;gap:8px}
+.trophy-pick button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;padding:8px 12px;font-weight:500;font-size:var(--bfs,13.333px)}
+.trophy-pick b{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);color:var(--gold)}
+
+@media (min-width:900px){
+  html,body{height:100%}
+  #app{height:100%}
+  main{grid-template-columns:minmax(0,1fr) minmax(360px,430px);flex:1}
+  .stage{justify-content:center;height:100%;min-height:0}
+  #side{overflow-y:auto;padding:0 6px 8px 2px;scrollbar-width:thin;scrollbar-color:var(--panel2) transparent}
+}
+@media (max-width:420px){.tunes{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.logo{font-size:var(--dpx,32.68px)}}
+/* Reduced motion: honoured unless the owner chose "play effects anyway" on this device (Admin panel), which sets .force-motion on <html>. */
+@media (prefers-reduced-motion:reduce){html:not(.force-motion) *,html:not(.force-motion) *::before,html:not(.force-motion) *::after{animation:none!important;transition:none!important}}
+
+/* art slots: optional pictures from game-data.json assets.images */
+.icon{width:22px;height:22px;object-fit:contain;flex:none;align-self:center}
+.weapon .icon{width:auto;height:auto;max-width:100%;object-fit:contain;image-rendering:pixelated;align-self:flex-start;margin:2px 0 5px}   /* pixel art at its own 3x size */
+.trophies .icon,.trophy-pick .icon{width:18px;height:18px;vertical-align:-3px;margin-right:5px}
+.tune{justify-content:flex-start}.tune>div{flex:1;min-width:0}
+.logo-img{height:32px;max-width:260px;object-fit:contain;display:block}
+.card.warn{border-color:var(--accent)}
+.card.warn ul{margin:0;padding-left:18px;font-size:var(--bfs,13.333px);color:var(--dim);word-break:break-all}
+
+/* error page shown by the loader in index.html when the data or a script is broken */
+#fatal{max-width:760px;margin:6vh auto;padding:20px 24px;background:var(--panel);border:3px solid var(--mult);border-radius:16px;box-shadow:0 6px 0 var(--drop)}
+#fatal h1{font-size:var(--dpx,32.68px);color:var(--mult);margin-bottom:12px}
+#fatal ul{margin:0 0 14px;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;word-break:break-word}
+#fatal p{color:var(--dim)}
+#notice{background:var(--accent);color:var(--ink);font-weight:600;font-size:var(--bfs,13.333px);border:2px solid var(--drop);border-radius:10px;padding:6px 12px}
+#selftest{max-width:860px;margin:4vh auto;padding:20px 24px;background:var(--panel);border:2px solid var(--drop);border-radius:16px;box-shadow:0 6px 0 var(--drop);display:flex;flex-direction:column;gap:12px}
+#selftest h1{font-size:var(--dpx,32.68px);color:var(--gold)}
+#selftest p{color:var(--dim)}
+#selftest pre{margin:0;background:var(--ink);border-radius:10px;padding:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-x:auto}
+#selftest button{align-self:flex-start}
+
+/* coloured keywords on cards, and the glossary on the title screen */
+.kw{font-weight:700;white-space:nowrap}
+.kw[data-tip]{cursor:help;text-decoration:underline dotted;text-decoration-thickness:1px;text-underline-offset:3px}
+/* hint bubble for anything with data-tip (ui.js). Native title tooltips do not show inside the chat artifact pane. */
+#tip{position:fixed;z-index:60;left:0;top:0;max-width:250px;pointer-events:none;background:var(--ink);color:var(--chalk);border:2px solid var(--chalk);border-radius:10px;box-shadow:0 4px 0 var(--drop);padding:6px 10px;font-size:var(--bfs,13.333px);font-weight:500;line-height:1.35}
+.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 14px;margin:0;font-size:var(--bfs,13.333px)}
+.gloss div{display:flex;gap:7px;align-items:baseline}
+.gloss dt{font-family:var(--body);font-size:var(--bfs,13.333px);color:var(--chalk);min-width:54px}
+.gloss dd{margin:0;color:var(--dim);line-height:1.3}
+
+/* live stats: the expandable panel in the fight card */
+.ballcard h3{align-items:center}
+.fold-btn{margin-left:auto;font-family:var(--body);font-size:var(--bfs,13.333px);padding:2px 9px;border-radius:8px;display:inline-flex;align-items:center;gap:7px}
+.fold-btn i{width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .2s}
+.fold-btn[aria-expanded="true"] i{transform:translateY(2px) rotate(-135deg)}
+.fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.fold.open{grid-template-rows:1fr}
+.fold>div{overflow:hidden;min-height:0}
+.stats.livegrid dd{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.stats.livegrid dd b{font-weight:400;display:inline-block}
+.stats.livegrid small{font-family:var(--body);font-size:var(--bfs,13.333px);font-weight:700;color:var(--dim)}
+.stats.livegrid small.up{color:var(--pow)} .stats.livegrid small.down{color:var(--mult)}
+.stats.livegrid .tick-up{animation:tickEdgeUp .55s ease-out} .stats.livegrid .tick-up b{animation:tickUp .28s ease-out}
+.stats.livegrid .tick-down{animation:tickEdgeDown .55s ease-out} .stats.livegrid .tick-down b{animation:tickDown .28s ease-out}
+@keyframes tickUp{from{transform:translateY(4px);color:var(--pow)}to{transform:none}}
+@keyframes tickDown{from{transform:translateY(-4px);color:var(--mult)}to{transform:none}}
+@keyframes tickEdgeUp{from{box-shadow:inset 0 0 0 1.5px var(--pow)}to{box-shadow:inset 0 0 0 1.5px transparent}}
+@keyframes tickEdgeDown{from{box-shadow:inset 0 0 0 1.5px var(--mult)}to{box-shadow:inset 0 0 0 1.5px transparent}}
+
+/* impact frames: colour overlay layer; the canvas itself gets a CSS filter and zoom from ui.js */
+#impactfx{position:absolute;inset:0;pointer-events:none;opacity:0}
+
+/* admin panel */
+.card.admin{border:2px dashed var(--accent)}
+.adm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:7px}
+.adm-grid label{display:flex;flex-direction:column;gap:2px;font-size:var(--bfs,13.333px);font-weight:700;letter-spacing:0;text-transform:uppercase;color:var(--dim)}
+.adm-grid input{font:inherit;font-size:var(--bfs,13.333px);font-weight:500;letter-spacing:0;color:var(--chalk);background:var(--ink);border:2px solid var(--drop);border-radius:8px;padding:4px 7px;width:100%;min-width:0}
+.adm-grid input::placeholder{color:var(--dim);opacity:.7}
+.adm-grid input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+.adm-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:var(--bfs,13.333px);color:var(--dim)}
+.adm-row button{padding:3px 10px;font-size:var(--bfs,13.333px)}
+.adm-note{font-size:var(--bfs,13.333px);color:var(--dim);line-height:1.4}
+
+/* restart button: the fill grows while R is held */
+#restart{position:relative;overflow:hidden}
+#restart-fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--mult);opacity:.55;pointer-events:none}
+#restart-label{position:relative}
+#restart.armed{background:var(--mult);color:var(--ink)}
+
+
+/* selling: the needle that augments are dragged onto (shop only), and the pop when one is sold */
+.sellbin+h3{padding-right:58px;min-height:48px;align-content:center}
+.sellbin{position:sticky;top:6px;z-index:6;align-self:flex-end;flex:none;width:48px;height:48px;margin-bottom:-57px;border-radius:50%;display:grid;place-items:center;
+  background:var(--ink);border:2px dashed var(--line);color:var(--dim);cursor:help;transition:transform .15s ease,border-color .15s ease,color .15s ease}
+.sellbin svg{width:34px;height:34px;display:block}
+.sellbin .icon{width:42px;height:42px;grid-area:1/1}
+.sellbin .bin-armed{display:none}
+.sellbin.armed .bin-armed{display:block}
+.sellbin.armed .bin-armed~.bin-idle{display:none}
+.sellbin .bin-idle~svg,.sellbin.armed .bin-armed~svg{display:none}
+.sellbin b{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;padding:0 7px;border-radius:99px;background:var(--ink);border:2px solid var(--drop);color:var(--gold);font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);white-space:nowrap;display:none}
+body.drag-active .sellbin{border-color:var(--mult);color:var(--mult);transform:scale(1.12)}
+body.drag-active .sellbin.armed{border-style:solid;background:var(--mult);color:var(--ink);transform:scale(1.32) rotate(-16deg);box-shadow:0 0 16px var(--mult)}
+.sellbin.armed b{display:block;transform:translateX(-50%) rotate(16deg)}
+.popbit{position:fixed;z-index:70;width:7px;height:7px;border-radius:50%;pointer-events:none}
+
+/* ----- pixel fonts (assets.fonts, sized by theme.fonts) -----
+   Both fonts are pixel fonts and are sharp only where one font pixel lands on whole screen pixels.
+   Small text is Alpha Beta at --bfs (theme.fonts.bodySize): its pixel is 1/13.333 of the font size, so 13.333 px or 26.667 px.
+   Titles are Pixel Game at --dpx (theme.fonts.displaySize): its pixel is 1/32.68 of the font size, so 32.68 px (or 1.5x / 2x for the hero).
+   Pixel Game below that size blurs its one-pixel gaps shut on screen (G reads as B, S as 5), so small titles such as card names, prices and
+   stat numbers use Alpha Beta instead. Keep every new rule on one of these sizes. Faked bold and font smoothing both smear pixel fonts, so both are off;
+   text marked bold simply shows in the regular weight. */
+html{-webkit-font-smoothing:none;font-synthesis:none}
+
+/* tier tracker on the next-fight card: three steps (two fights and the boss diamond). In the shop the current and later steps are buttons that
+   preview that fight; .sel marks the one shown, .peeking the card while a later fight is previewed. */
+.steps{display:flex;align-items:flex-start;margin:2px 0 4px}
+.step{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:70px;padding:4px 4px 2px;margin:0;background:none;border:0;border-radius:10px;box-shadow:none;
+  color:var(--dim);font:inherit;font-size:var(--bfs,13.333px);font-weight:400;line-height:1.2}
+.step i{display:block;width:30px;height:30px;border-radius:50%;border:3px solid var(--dim);background:var(--ink);transition:transform .12s ease}
+.step.boss i{width:26px;height:26px;margin:2px;border-radius:5px;transform:rotate(45deg);border-color:var(--mult)}
+.step.done i{background:var(--dim)}
+.step.now i{border-color:var(--accent);background:var(--accent)}
+.step.boss.now i{background:var(--mult);border-color:var(--mult)}
+.step.sel span{color:var(--chalk)}
+button.step[aria-pressed="true"]{background:none;color:var(--dim)}   /* not the white "pressed" look of the speed buttons */
+.step.sel i{box-shadow:0 0 0 3px var(--panel),0 0 0 6px var(--gold)}
+button.step{cursor:pointer}
+button.step:hover:not(:disabled){filter:none;background:var(--panel2)}
+button.step:hover i{transform:scale(1.12)} button.step.boss:hover i{transform:rotate(45deg) scale(1.12)}
+button.step:active:not(:disabled){transform:none;box-shadow:none}
+.step-line{flex:1;min-width:10px;height:3px;margin-top:20px;border-radius:2px;background:var(--line)}
+.next.peeking{border:2px dashed var(--gold);box-shadow:0 4px 0 var(--drop)}
+.peek-tag{color:var(--gold)}
+.go.back{background:var(--panel2);color:var(--chalk)}
+
+/* the Your ball card blinks when the player clicks their ball in the shop */
+.card.flash{animation:cardFlash .7s ease-out}
+@keyframes cardFlash{from{box-shadow:0 0 0 3px var(--gold),0 4px 0 var(--drop)}to{box-shadow:0 0 0 3px transparent,0 4px 0 var(--drop)}}

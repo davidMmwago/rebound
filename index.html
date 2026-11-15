@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rebound</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="cards.css">
+</head>
+<body>
+<!-- Page shell only. Load order: game-data.json -> validate.js -> core.js -> ui.js (see the loader script at the bottom).
+     With #selftest on the address, selftest.js runs in place of ui.js.
+     game-data-fallback.js is a safety copy of the data, used only if the page cannot read game-data.json. -->
+<div id="app">
+  <div id="notice" hidden></div>
+  <header class="bar">
+    <div class="logo" id="logo"></div>
+    <div class="chips" id="chips"></div>
+    <div class="ctl">
+      <div class="seg" id="speed" role="group" aria-label="Fight speed"></div>
+      <button id="pause" data-act="pause" aria-pressed="false">Pause</button>
+      <button id="mute" data-act="mute" aria-pressed="true">Sound on</button>
+      <button id="restart" data-act="restart" hidden><i id="restart-fill"></i><span id="restart-label">Restart</span></button>
+      <button id="admin" data-act="admin" aria-pressed="false" hidden>Admin</button>
+    </div>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="arena" id="arena">
+        <canvas id="cv" width="720" height="720" aria-label="The arena: your ball and the enemy balls bounce and fight here"></canvas>
+        <div id="impactfx"></div>
+        <div id="overlay" hidden></div>
+      </div>
+      <div class="readout idle" id="readout" aria-live="off">
+        <div class="ro pw"><small id="lblP">Power</small><b id="roP">–</b></div><i>×</i>
+        <div class="ro ml"><small id="lblM">Mult</small><b id="roM">–</b></div><i>=</i>
+        <div class="ro dm"><small id="lblD">Last hit</small><b id="roD">–</b></div>
+      </div>
+    </section>
+    <aside id="side"></aside>
+  </main>
+</div>
+<div id="tip" role="tooltip" hidden></div>
+<div id="fatal" hidden></div>
+<div id="selftest" hidden><h1>Self-test</h1><p>This plays the game without graphics to check for crashes and measure difficulty. It takes up to a minute. Remove #selftest from the address to play normally.</p><pre id="selftest-out"></pre><button id="selftest-copy" hidden>Copy report</button></div>
+<script>
+/* Loader. Fetches game-data.json, checks it, then loads the game scripts in order.
+   If anything is wrong it shows a plain-English error page instead of a broken game. */
+(function(){
+  var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  function fail(title,lines,foot){
+    var f=document.getElementById('fatal');document.getElementById('app').hidden=true;f.hidden=false;
+    f.innerHTML='<h1>'+esc(title)+'</h1><ul>'+lines.filter(Boolean).map(function(l){return'<li>'+esc(l)+'</li>'}).join('')+'</ul><p>'+esc(foot||'Fix game-data.json and publish it again. Nothing else needs to change.')+'</p>';
+  }
+  function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('Could not load '+src))};document.body.appendChild(s)})}
+  window.addEventListener('error',function(e){if(!window.GAME_STARTED&&e.message)fail('A game script has an error',[e.message,(e.filename||'').split('/').pop()+' line '+e.lineno],'This is a code problem in the named file, not a data problem.')});
+  function boot(txt,data){
+    if(txt!=null){
+      try{data=JSON.parse(txt)}catch(e){
+        var m=/position (\d+)/.exec(e.message),where='';
+        if(m){var before=txt.slice(0,+m[1]).split('\n'),n=before.length,all=txt.split('\n');where='Look near line '+n+': '+(all[n-1]||'').trim().slice(0,120)}
+        return fail('game-data.json is not valid JSON',[e.message,where,'Usual causes: a missing or extra comma, a missing quote mark, or a missing bracket just before that spot.']);
+      }
+    }
+    return load('validate.js').then(function(){
+      var p=validateGameData(data);
+      if(p.length)return fail('game-data.json has '+p.length+(p.length===1?' problem':' problems'),p);
+      window.GAME_DATA=data;
+      return load('core.js').then(function(){
+        if(CORE_PROBLEMS.length)return fail('The data and the code do not match',CORE_PROBLEMS,'Remove those entries from game-data.json, or add their code to core.js.');
+        return load(location.hash==='#selftest'?'selftest.js':'ui.js');
+      });
+    });
+  }
+  var missing='Check that every file of the artifact was published: index.html, style.css, validate.js, core.js, ui.js, game-data.json.';
+  fetch('game-data.json',{cache:'no-store'}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);return r.text();
+  }).then(function(txt){return boot(txt)},function(e){
+    /* Safety net: if the page is not allowed to read the JSON file, use the copy in game-data-fallback.js and say so. */
+    return load('game-data-fallback.js').then(function(){
+      if(!window.GAME_DATA_FALLBACK)throw new Error('no fallback data');
+      var n=document.getElementById('notice');n.hidden=false;
+      n.textContent='Could not read game-data.json ('+e.message+'). Showing the built-in safety copy, so recent edits may be missing.';
+      return boot(null,window.GAME_DATA_FALLBACK);
+    },function(){fail('The game could not start',['game-data.json could not be loaded: '+e.message],missing)});
+  }).catch(function(e){fail('The game could not start',[e.message],missing)});
+})();
+</script>
+</body>
+</html>
