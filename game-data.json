@@ -580,7 +580,7 @@
   "bosses": {
     "_note": "Same stat fields as enemies, plus 'rule' (shown to the player), 'phase2' (what changes at half HP), 'weak' and 'resists' (keywords shown on the boss card) and 'values' (numbers the boss's special behaviour reads). hp is multiplied by rules.scaling.bossHpFactor. A boss added here with no code is simply a big enemy with these stats. Optional minTier: the boss never comes before that tier.",
     "bulwark": { "name": "The Bulwark", "minTier": 3, "rule": "Heavy Armor. Crits and wall slams crack it: -{crack} Armor.",
-      "phase2": "Raises a front shield for {shieldSeconds}s every {shieldEvery}s.", "weak": ["Poison", "Burn", "Crit", "Knockback"], "resists": ["Mult"],
+      "phase2": "Raises a front shield for {shieldSeconds}s every {shieldEvery}s.", "weak": ["Poison", "Burn", "Crit", "Knockback"], "resists": ["Small hits"],
       "hp": 250, "radius": 42, "speed": 98, "bodyDamage": 8, "armor": 4, "color": "#5c677d",
       "weapons": [ { "type": "hammer", "power": 13, "reach": 34, "spin": 2.5 } ],
       "values": { "crack": 1, "slamWindow": 0.7, "shieldEvery": 5, "shieldSeconds": 2, "shieldArc": 1.1 } },
