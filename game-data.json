@@ -62,6 +62,7 @@
       "fromTier": 3, "chancePercent": 35, "gold": 2, "armor": 3, "swiftPercent": 40, "vampiricPercent": 20, "volatileDamage": 12, "volatileRadius": 70, "wardSeconds": 5
     },
     "consumables": { "_note": "Items: bagSize is how many you can hold, shopItems how many the shop offers.", "bagSize": 3, "shopItems": 2 },
+    "bow": { "_note": "Your Bow: its fire rate scales with Spin (at its listed Spin it fires every fireEvery seconds), arrow speed with Reach (at its listed Reach, projectiles.playerSpeed). spinPower softens the fire rate: 1 = twice the Spin fires twice as fast, 0.7 = about 1.6 times as fast. Limits below.", "minFireEvery": 0.25, "minSpeedX": 0.5, "maxSpeedX": 2.5, "spinPower": 0.7 },
     "status": {
       "_note": "Chill: each stack slows an enemy's movement and blades by chillSlowPercent and fades by chillFadePerSecond. At chillMax stacks the enemy is Frozen (cannot move, swing, shoot or ram) for freezeSeconds; bosses for bossFreezePercent of that.",
       "chillSlowPercent": 5, "chillMax": 10, "chillFadePerSecond": 1, "freezeSeconds": 1, "bossFreezePercent": 50
@@ -70,6 +71,8 @@
     "projectiles": { "playerSpeed": 540, "enemySpeed": 250, "spread": 0.15, "maxPerVolley": 14, "lifetime": 5 },
     "feel": { "hitStop": 0.025, "critHitStop": 0.05, "shakePerHitTaken": 2.5, "maxShake": 5, "restartHoldSeconds": 0.7, "sellHoldSeconds": 0.5, "sellConfirmSeconds": 2.6,
       "_cardTiltNote": "Augment cards lift on hover and lean away under the pointer. maxDegrees is the lean, lift is in pixels, scale 1.02 = 2% bigger.",
+      "_typewriterNote": "The recap after a fight types itself out. charsPerSecond: typing speed at 1x game speed. scaleWithSpeed: type faster at 2x, 4x and 8x. soundEvery: a click every so many letters. Any mouse click skips it. Set enabled to false to show it at once.",
+      "typewriter": { "enabled": true, "charsPerSecond": 45, "soundEvery": 2, "scaleWithSpeed": true },
       "cardTilt": { "enabled": true, "maxDegrees": 6, "lift": 4, "scale": 1.02 },
       "_stretchNote": "Squash and stretch, drawing only. A ball faster than startSpeed stretches along its path, up to maxStretch (0.22 = 22% longer) at fullSpeed. On a bounce it squashes by up to bounceSquash for bounceSeconds. Balls slower than startSpeed stay round.",
       "stretch": { "enabled": true, "startSpeed": 150, "fullSpeed": 650, "maxStretch": 0.22, "bounceSquash": 0.2, "bounceSeconds": 0.12 } }
@@ -146,8 +149,8 @@
       "rampText": "+{mult} Mult per hit", "ramp": { "mult": 0.15 }
     },
     "bow": {
-      "name": "Bow", "blurb": "Ranged. Auto-aims. Arrows can be parried.",
-      "type": "bow", "power": 7, "reach": 20, "spin": 3, "speed": 185, "blades": 1, "fireEvery": 1.1,
+      "name": "Bow", "blurb": "Ranged, auto-aims. Spin: fire rate. Reach: arrow speed.",
+      "type": "bow", "power": 7, "reach": 20, "spin": 3, "speed": 185, "blades": 1, "fireEvery": 1.1, "knockback": 120,
       "rampText": "+1 arrow per {hitsPerArrow} hits", "ramp": { "hitsPerArrow": 4 }
     },
     "fists": {
@@ -372,8 +375,8 @@
       "values": { "reachPer": 10 } },
     "sweetspot": { "name": "Sweet Spot", "rarity": "Uncommon", "tags": ["blade", "reach"],
       "_note": "reach: how far from your ball (in the same units as the Reach stat) a weapon hit must land.",
-      "text": "Weapon hits {reach}+ Reach away: ×{mult} Mult.",
-      "values": { "reach": 35, "mult": 1.6 } },
+      "text": "Weapon hits {reach}+ Reach away: ×{mult} Mult. Arrows: after flying {arrowRange}.",
+      "values": { "reach": 35, "mult": 1.6, "arrowRange": 150 } },
     "sweep": { "name": "Sweep", "rarity": "Rare", "tags": ["blade", "reach"],
       "text": "Your blade hits every enemy it touches, not just the first.",
       "values": {} },
@@ -493,6 +496,10 @@
       "_note": "A Mini that stays alive for 'seconds' in a fight becomes a Mini-You there and then (up to max at once). hpPercent: a Mini-You's HP as a share of your Max HP. reachPercent: its blade length as a share of yours. miniDamagePercent: how hard ordinary Minis ram while you hold this (100 = unchanged; lower it to nerf them before they transform).",
       "text": "Minis: -{hpCut}% Max HP. A Mini alive for {seconds}s becomes a Mini-You: your weapon and augments, {damagePercent}% damage. Max {max}.",
       "values": { "hpCut": 50, "seconds": 6, "damagePercent": 40, "max": 3, "hpPercent": 35, "reachPercent": 70, "radius": 14, "miniDamagePercent": 100 } },
+    "domino": { "name": "Domino Effect", "rarity": "Legendary", "tags": ["shot", "scale"],
+      "_note": "A projectile that kills an enemy flies on to the nearest one with percent% more damage, up to max links. showAt: chain length from which 'Chain ×n' shows. heavyAt and massiveAt: chain lengths that play the two impact frame levels. The card keeps the run's longest chain.",
+      "text": "Projectile kills: it flies on to the nearest enemy with +{percent}% damage. Chains.",
+      "values": { "percent": 100, "max": 12, "showAt": 2, "heavyAt": 4, "massiveAt": 6 } },
     "catalyst": { "name": "Catalyst", "rarity": "Legendary", "tags": ["poison", "burn"],
       "text": "Poison and Burn deal ×{mult} damage. ×{bothMult} with both.",
       "values": { "mult": 2, "bothMult": 3 } },
@@ -571,7 +578,7 @@
       "healPerSecond": 5, "about": "Heals with a beam. Cut it with your blade.", "values": { "cutSeconds": 3 } },
     "guard": { "name": "Guard", "cost": 3, "minTier": 4, "hp": 58, "radius": 20, "speed": 142, "bodyDamage": 6, "armor": 0, "color": "#5a8fb8",
       "weapons": [ { "type": "shield", "power": 0, "reach": 44, "spin": 3.4 } ],
-      "about": "Shields its weakest ally from you.", "values": { "gap": 6, "steer": 520 } },
+      "about": "Rushes to shield hurt allies from you.", "values": { "gap": 6, "steer": 400, "turn": 1.6, "hurtPercent": 70 } },
     "crusher": { "name": "Crusher", "cost": 4, "minTier": 5, "hp": 66, "radius": 22, "speed": 135, "bodyDamage": 0, "armor": 0, "color": "#c8553d",
       "weapons": [ { "type": "hammer", "power": 14, "reach": 36, "spin": 2.9 } ],
       "about": "Slams the floor around it. Leave the ring.", "values": { "every": 5, "warning": 0.7, "slamRadius": 60, "slamDamage": 10 } }
@@ -681,7 +688,7 @@
     "breakdownTitle": "Damage breakdown", "breakdownDealt": "Dealt by", "breakdownAdded": "Added by", "breakdownTriggered": "{n}×",
     "breakdownAddedTip": "Extra damage each one added on top of the hits it boosted. Boosts overlap, so these can add up to more than the total.",
     "breakdownOther": "No damage counted",
-    "sourceNames": { "weapon": "Weapon", "body": "Body hits", "proj": "Projectiles", "mini": "Minis", "miniyou": "Mini-Yous", "aoe": "Effects", "poison": "Poison", "burn": "Burn", "crit": "Crits", "ramp": "Ramp", "other": "Other", "bomb": "Bombers", "pocket": "Pockets" }, "chainBest": "Best ×{n}", "jumpToCurrent": "Jump to current", "previewTag": "Preview", "previewTip": "Preview this fight", "previewCurrentTip": "Current fight"
+    "sourceNames": { "weapon": "Weapon", "body": "Body hits", "proj": "Projectiles", "mini": "Minis", "miniyou": "Mini-Yous", "aoe": "Effects", "poison": "Poison", "burn": "Burn", "crit": "Crits", "ramp": "Ramp", "other": "Other", "bomb": "Bombers", "pocket": "Pockets" }, "chainBest": "Best ×{n}", "chainRecord": "Record ×{n}", "jumpToCurrent": "Jump to current", "previewTag": "Preview", "previewTip": "Preview this fight", "previewCurrentTip": "Current fight"
   },
 
 
@@ -747,14 +754,14 @@
       "sellBin": { "_note": "The needle that augments are dragged onto to sell them. 256 x 256, transparent. 'armed' shows while an augment is held over it; leave it null to use 'idle' for both.", "idle": null, "armed": null },
       "icons": {
         "_note": "Small pictures shown on cards. Add any augment, weapon, tune-up or trophy id, for example \"whet\": \"assets/icons/whet.png\".",
-        "augments": { "rubber": "assets/icons/augments/rubber.png", "mirror": "assets/icons/augments/mirror.png", "pinball": "assets/icons/augments/pinball.png" },
+        "augments": { "rubber": "assets/icons/augments/rubber.png", "mirror": "assets/icons/augments/mirror.png", "pinball": "assets/icons/augments/pinball.png", "glass": "assets/icons/augments/glass.png", "gyro": "assets/icons/augments/gyro.png" },
         "weapons": { "sword": "assets/weapons/icon-sword.png", "daggers": "assets/weapons/icon-daggers.png", "spear": "assets/weapons/icon-spear.png", "hammer": "assets/weapons/icon-hammer.png", "bow": "assets/weapons/icon-bow.png", "fists": "assets/weapons/icon-fists.png" },
         "tuneUps": {}, "trophies": {}
       }
     },
     "sounds": {
       "wall": null, "clack": null, "hit": null, "crit": null, "parry": null, "pop": null, "hurt": null, "zap": null, "boom": null, "shot": null,
-      "win": null, "lose": null, "bossdie": null, "coin": null, "deny": null, "impact": null, "sell": null
+      "win": null, "lose": null, "bossdie": null, "coin": null, "deny": null, "impact": null, "sell": null, "type": null
     },
     "music": { "title": null, "shop": null, "fight": null, "boss": null }
   }

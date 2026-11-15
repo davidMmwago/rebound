@@ -35,6 +35,7 @@ function validateGameData(D){
  if(isObj(R.run)&&isNum(R.run.tiersToWin)&&R.run.tiersToWin<1)out.push('rules.run.tiersToWin must be at least 1');
  if('knockback' in R){if(!isObj(R.knockback))out.push('rules.knockback must be an object in { }');else for(const k of keys(R.knockback))num(R.knockback,k,'rules.knockback')}
  if('overflow' in R){if(!isObj(R.overflow))out.push('rules.overflow must be an object in { }');else for(const k of keys(R.overflow))num(R.overflow,k,'rules.overflow')}
+ if('bow' in R){if(!isObj(R.bow))out.push('rules.bow must be an object');else for(const k of keys(R.bow))num(R.bow,k,'rules.bow')}
  if('elites' in R){if(!isObj(R.elites))out.push('rules.elites must be an object in { }');else for(const k of keys(R.elites))num(R.elites,k,'rules.elites')}
  if(isObj(R.scaling))for(const k of['endlessHpPerTier','endlessDamagePerTier','endlessAcceleration','lateFromTier','lateHpPerTier','lateDamagePerTier','firstBossHpPercent'])if(k in R.scaling)num(R.scaling,k,'rules.scaling');
  if(isObj(R.economy)&&isNum(R.economy.interestPerGold)&&R.economy.interestPerGold<=0)out.push('rules.economy.interestPerGold must be more than 0');

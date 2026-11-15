@@ -88,6 +88,7 @@ const SFX={
  bossdie:()=>{tone(90,.5,'sawtooth',.09,30);tone(660,.3,'triangle',.05,1320,.1)},coin:()=>tone(1320,.08,'square',.035,1760),deny:()=>tone(160,.1,'square',.04),
  impact:()=>{tone(65,.4,'sawtooth',.1,28);tone(1400,.07,'square',.05,180)},
  sell:()=>SFX.pop(),
+ type:()=>tone(1500+Math.random()*400,.018,'square',.016),   // the post-fight recap typing out
 };
 function play(k){
  if(G.muted)return;
@@ -161,7 +162,7 @@ function toPrep(){
 }
 function startFight(){const run=G.run;G.peek=null;G.S=newFight(run,{juice:true});G.phase='fight';G.paused=false;lastN=0;clearFx();audioOn();render()}
 function endFight(){
- const S=G.S,run=G.run;
+ const S=G.S,run=G.run;G.sheetId=(G.sheetId||0)+1;   // a new recap sheet: type it out once
  if(S.done==='win'){G.pay=payout(run,S);G.wasBoss=run.stage===2;G.lastBoss=run.enc.boss;G.finalWin=G.wasBoss&&run.tier===RULES.run.tiersToWin&&!run.endless;
   if(G.wasBoss&&run.tier>G.best&&!run.admin){G.best=run.tier;savePrefs()}
   advance(run);G.phase=G.finalWin?'victory':'payout';play('coin')}
@@ -343,7 +344,9 @@ function renderOverlay(){
   const b=run.enc.boss&&BOSS[run.enc.boss];
   h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}${breakdown(G.S,run)}<div class="row"><button class="go" data-act="restart-now" data-primary>${TX.restart||'Restart'}</button><button data-act="title">${TX.newRun}</button></div></div>`;
  }
+ if(typer)typer.cancel();
  overlay.innerHTML=h;overlay.hidden=!h;
+ if(h&&G.sheetId&&G.sheetId!==G.typedId){G.typedId=G.sheetId;typeSheet()}
 }
 /* Damage breakdown after a fight (payout, victory and game over). core.js records, for every point of damage, who dealt it (S.dmgBy 'src:' and 'aug:')
    and how much each boost added to the hits it touched ('boost:'), plus how often each augment triggered (S.trig). Boosts overlap, so the
@@ -364,6 +367,29 @@ function breakdown(S,run){
   ${rest.length?`<p class="bd-rest">${TX.breakdownOther||'No damage counted'}: ${rest.join(', ')}</p>`:''}</details>`;
 }
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='bd'){G.bdOpen=e.target.open;savePrefs()}},true);
+/* The recap sheet types itself out (payout, victory, game over): lines appear one by one, letters tick in with a soft click, gold amounts chime
+   when they finish, and the breakdown bars grow as their row appears. Any mouse click (except on a button) shows everything at once. Typing speeds up with the game speed (1x to 8x). Settings:
+   rules.feel.typewriter (enabled, charsPerSecond, soundEvery). Off for reduced motion. The title, buttons and a closed breakdown are not typed. */
+const TW=Object.assign({enabled:true,charsPerSecond:140,soundEvery:3},RULES.feel.typewriter||{});
+let typer=null;
+function typeSheet(){
+ const sh=overlay.querySelector('.sheet');if(!sh||reduce||TW.enabled===false)return;
+ const nodes=[],walk=document.createTreeWalker(sh,NodeFilter.SHOW_TEXT,{acceptNode:n=>{const el=n.parentElement;if(!n.nodeValue.trim()||el.closest('button,h2,.eyebrow'))return NodeFilter.FILTER_REJECT;
+  const d=el.closest('details');return d&&!d.open&&!el.closest('summary')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
+ for(let n;n=walk.nextNode();)nodes.push({n,t:n.nodeValue,row:n.parentElement.closest('li,dl>div,summary,p,h4')});
+ if(!nodes.length)return;
+ const rows=new Set(nodes.map(x=>x.row).filter(Boolean));rows.forEach(r=>r.classList.add('tw-hide'));nodes.forEach(x=>x.n.nodeValue='');
+ let i=0,c=0,acc=0,count=0,last=performance.now(),raf=0;
+ const stop=()=>{cancelAnimationFrame(raf);document.removeEventListener('pointerdown',skip,true);typer=null};
+ const finish=()=>{stop();nodes.forEach(x=>x.n.nodeValue=x.t);rows.forEach(r=>r.classList.remove('tw-hide'))};
+ const skip=e=>{if(!(e.target.closest&&e.target.closest('button,summary')))finish()};   // any click except a button shows it all
+ const tick=now=>{acc+=Math.min(.1,(now-last)/1000)*TW.charsPerSecond*(TW.scaleWithSpeed===false?1:G.speed);last=now;   // faster at 2x, 4x, 8x game speed
+  while(acc>=1&&i<nodes.length){const x=nodes[i];if(x.row)x.row.classList.remove('tw-hide');c++;x.n.nodeValue=x.t.slice(0,c);acc--;
+   if(++count%TW.soundEvery===0&&x.t[c-1]!==' ')play('type');
+   if(c>=x.t.length){if(/^\+\$/.test(x.t.trim()))play('coin');i++;c=0}}
+  if(i>=nodes.length){finish();return}raf=requestAnimationFrame(tick)};
+ document.addEventListener('pointerdown',skip,true);raf=requestAnimationFrame(tick);typer={finish,cancel:stop};
+}
 function runStats(run,S){
  const s=run.stats,best=Math.max(s.bestHit,S?S.bestHit:0),kills=s.kills+(S?S.kills:0);
  return `<dl class="stats wide"><div><dt>${TX.statFights}</dt><dd>${s.fights}</dd></div><div><dt>${TX.statKills}</dt><dd>${kills}</dd></div><div><dt>${TX.statBestHit}</dt><dd>${fmt(best)}</dd></div><div><dt>${TX.statWeapon}</dt><dd>${WEAPONS[run.weapon].name}</dd></div></dl>`;

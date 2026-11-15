@@ -253,3 +253,9 @@ button.step:active:not(:disabled){transform:none;box-shadow:none}
 .bd .pay li{background:linear-gradient(90deg,var(--line) var(--w,0%),transparent var(--w,0%));padding:0 4px}
 .bd .pay small{color:var(--dim);font-family:var(--body);font-size:var(--bfs,13.333px)}
 .bd-rest{margin:4px 0 0;color:var(--dim)}
+
+/* the recap sheet typing out (typeSheet() in ui.js): rows stay hidden until their first letter, breakdown bars grow in */
+.tw-hide{visibility:hidden}
+@property --w{syntax:'<percentage>';inherits:false;initial-value:0%}
+.bd .pay li{transition:--w .45s ease-out}
+.bd .pay li.tw-hide{--w:0%!important}

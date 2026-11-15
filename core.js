@@ -87,8 +87,9 @@ const ENEMY_CODE={
   for(const o of S.balls)if(o.alive&&o.team===0&&Math.hypot(o.x-b.x,o.y-b.y)<v.triggerRange+o.r+b.r){b.fuse=v.fuseSeconds;snd(S,'zap');return}}},
  medic:{tick(S,b,dt,v){const m=b.healT;if(!m||!m.alive||b.cutT>S.t)return;
   for(const o of S.balls){if(!o.alive||o.team!==0)continue;for(const w of o.ws){if(w.type==='bow')continue;if(segX(seg(o,w),[b.x,b.y,m.x,m.y])){b.cutT=S.t+v.cutSeconds;b.healT=null;fx(S,{k:'spark',x:(b.x+m.x)/2,y:(b.y+m.y)/2});snd(S,'parry');count(S,'tethersCut');return}}}}},
- guard:{tick(S,b,dt,v){const p=S.player;let m=null;for(const o of S.balls)if(o.alive&&o.team===1&&o!==b&&o.kind!=='guard'&&(!m||o.hp/o.maxhp<m.hp/m.maxhp))m=o;
-  for(const w of b.ws){w.ang=Math.atan2(p.y-b.y,p.x-b.x);w.spin=0}
+ guard:{tick(S,b,dt,v){const p=S.player;let m=null;for(const o of S.balls)if(o.alive&&o.team===1&&o!==b&&o.kind!=='guard'&&o.hp<o.maxhp*v.hurtPercent/100&&(!m||o.hp/o.maxhp<m.hp/m.maxhp))m=o;   // only guards allies that are hurt
+  for(const w of b.ws){if(w.spin0==null)w.spin0=w.spin;w.spin=m?0:w.spin0;   // alone: the shield spins as normal, so it can always be hit
+   if(m){let d=Math.atan2(p.y-b.y,p.x-b.x)-w.ang;d=Math.atan2(Math.sin(d),Math.cos(d));const mx=v.turn*dt;w.ang+=clamp(d,-mx,mx)}}   // guarding: turns its shield toward you, not instantly
   if(!m||b.frozen>0||b.stun>0){b.noAim=0;return}b.noAim=1;const dx=p.x-m.x,dy=p.y-m.y,d=Math.hypot(dx,dy)||1,tx=m.x+dx/d*(m.r+b.r+v.gap),ty=m.y+dy/d*(m.r+b.r+v.gap);
   const ex=tx-b.x,ey=ty-b.y,ed=Math.hypot(ex,ey);if(ed>4){b.vx+=ex/ed*v.steer*dt;b.vy+=ey/ed*v.steer*dt}}},
  crusher:{tick(S,b,dt,v){if(b.frozen>0||b.stun>0)return;b.ait=(b.ait||0)+dt;if(b.ait<v.every)return;b.ait=0;b.pause=v.warning;b.tele=v.warning;
@@ -289,8 +290,9 @@ const AUG_CODE={
  lead:{stats(a,S,P,v){P.size*=1+v.sizePercent/100;P.armor+=v.armor}},
  heavyswing:{stats(a,S,P,v){inc(P,'kb',v.percent/100);P.pow+=v.power}},
  // reach (added with the Spear rework): Pike and Horizon read the blade's live length, so the Spear's Reach ramp feeds them
- pike:{onHit(a,S,c,v){if(c.src!=='weapon')return;const w=S.player.ws[0];if(w&&w.len>0){c.power+=w.len/v.reachPer;return true}},live:(a,S,v)=>{const w=S.player.ws[0];return w&&w.len>0?'+'+f1(Math.floor(w.len/v.reachPer*10)/10):''}},
- sweetspot:{onHit(a,S,c,v){if(c.src==='weapon'&&S.bladeAt>=v.reach){c.mult*=v.mult;return true}}},
+ pike:{onHit(a,S,c,v){if(c.src!=='weapon'&&!(c.src==='proj'&&S.arrow))return;   // blade hits and Bow arrows
+  const w=S.player.ws[0];if(w&&w.len>0){c.power+=w.len/v.reachPer;return true}},live:(a,S,v)=>{const w=S.player.ws[0];return w&&w.len>0?'+'+f1(Math.floor(w.len/v.reachPer*10)/10):''}},
+ sweetspot:{onHit(a,S,c,v){if((c.src==='weapon'&&S.bladeAt>=v.reach)||(c.src==='proj'&&S.arrow&&S.arrowD>=v.arrowRange)){c.mult*=v.mult;return true}}},
  sweep:{stats(a,S,P){P.sweep++}},
  horizon:{onHit(a,S,c,v){const w=S.player.ws[0];if(!w)return;const m=1+v.mult*Math.max(0,w.len-S.P.W.reach)/v.reachPer;if(m>1){c.mult*=m;return true}},
   live:(a,S,v)=>{const w=S.player.ws[0];return w?'×'+f1(1+v.mult*Math.max(0,w.len-S.P.W.reach)/v.reachPer):''}},
@@ -365,6 +367,7 @@ const AUG_CODE={
     b.alive=false;const m=spawnMiniYou(S,v,b.x,b.y);fx(S,{k:'ring',x:m.x,y:m.y,r:m.r+16,col:DATA.theme.page.gold});n++;did=true}
    return did},
   live:(a,S)=>{let n=0;for(const b of S.balls)if(b.alive&&b.miniYou)n++;return n?'×'+n:''}},
+ domino:{stats(a,S,P,v){P.domino={v,a}},live:a=>a.f.best>1?tpl(DATA.text.chainBest||'Best ×{n}',{n:a.f.best}):'',info:a=>a.n>1?tpl(DATA.text.chainRecord||'Record ×{n}',{n:a.n}):''},
  mirror:{},   // handled inside fire(): it runs the hooks of the augment below it
  perpetual:{stats(a,S,P,v){P.rampX*=v.mult}},
  catalyst:{stats(a,S,P,v){P.cat={mult:v.mult,both:v.bothMult}}},
@@ -487,7 +490,7 @@ function overflowMult(S){const P=S.P,cb=RULES.combat,o=S.over;let m=0;
 function calcPlayer(run,S){
  const W=WEAPONS[run.weapon],t=run.tune,pr=RULES.player;
  const P={W,hp:pr.baseHp+TUNE.hp.amount*t.hp+pr.hpPerBossBeaten*(run.grown||0),pow:W.pow+TUNE.pow.amount*t.pow,mult:1,spd:W.spd*(1+TUNE.spd.amount/100*t.spd),spin:W.spin*(1+TUNE.spin.amount/100*t.spin),reach:W.reach*(1+TUNE.reach.amount/100*t.reach),size:pr.radius,armor:TUNE.armor.amount*t.armor,
-  crit:pr.critChancePercent/100+TUNE.crit.amount/100*t.crit,critMult:pr.critMult,regen:TUNE.regen.amount*t.regen,blades:W.blades,bounceX:1,rampX:1,projBounce:0,projExtra:0,poisonX:1,burnX:1,burnDecay:1,cat:null,kb:W.kb*(1+TUNE.knock.amount/100*(t.knock||0)),impact:(RULES.player.impact||0)+W.impact+TUNE.impact.amount*(t.impact||0),frozenX:1,burnGrow:0,sweep:0,miniHpX:1,miniDmgX:1,miniArmor:0,miniRegen:0,hurtInv:0,miniSpd:0,miniKb:0};
+  crit:pr.critChancePercent/100+TUNE.crit.amount/100*t.crit,critMult:pr.critMult,regen:TUNE.regen.amount*t.regen,blades:W.blades,bounceX:1,rampX:1,projBounce:0,projExtra:0,poisonX:1,burnX:1,burnDecay:1,cat:null,kb:W.kb*(1+TUNE.knock.amount/100*(t.knock||0)),impact:(RULES.player.impact||0)+W.impact+TUNE.impact.amount*(t.impact||0),frozenX:1,burnGrow:0,domino:null,sweep:0,miniHpX:1,miniDmgX:1,miniArmor:0,miniRegen:0,hurtInv:0,miniSpd:0,miniKb:0};
  P.inc={};P.more={};
  fire(S||{run,disabled:null},'stats',P);   // trophies and other early sources first, then augments top to bottom
  applyLayers(P);
@@ -544,12 +547,26 @@ function spawnMini(S,x,y){
  const b=mkBall({team:0,mini:true,kind:'mini',x:x==null?p.x+(rnd(S.rsrc)-.5)*50:x,y:y==null?p.y+(rnd(S.rsrc)-.5)*50:y,r:M.radius,hp:S.P.hp*M.hpPercent/100*S.P.miniHpX,spd:S.P.miniSpd?Math.max(M.speed,S.P.spd):M.speed,armor:S.P.armor*Math.max(M.armorPercent/100,S.P.miniArmor),col:DATA.theme.balls.mini});
  b.born=S.t;b.x=clamp(b.x,12,AW-12);b.y=clamp(b.y,12,AH-12);launch(S,b);S.balls.push(b);
 }
-function shoot(S,from,ang,f,main,vol){
+function shoot(S,from,ang,f,main,vol,o){   // o (Bow arrows): {spdX: speed multiplier from Reach, kb: Knockback each arrow pushes with}
+ o=o||{};
  const P=S.P,PR=RULES.projectiles,want=(vol||1)+P.projExtra,n=Math.min(PR.maxPerVolley,want);
  if(want>n)count(S,'overflowShots',want-n);count(S,'shots',n);
  for(let i=0;i<n;i++){const a=ang+(i-(n-1)/2)*PR.spread,c=Math.cos(a),s=Math.sin(a);
-  S.projs.push({x:from.x+c*(from.r+6),y:from.y+s*(from.r+6),vx:c*PR.playerSpeed,vy:s*PR.playerSpeed,r:4,team:0,f,main,bn:P.projBounce,life:PR.lifetime,ang:a})}
+  S.projs.push({x:from.x+c*(from.r+6),y:from.y+s*(from.r+6),vx:c*PR.playerSpeed*(o.spdX||1),vy:s*PR.playerSpeed*(o.spdX||1),r:4,team:0,f,main,bn:P.projBounce,life:PR.lifetime,ang:a,arrow:!!o.arrow,kb:o.kb||0,d:0})}
  snd(S,'shot');
+}
+/* Domino Effect: a projectile that kills flies on to the nearest enemy with more damage (p.f grows), as many times as it keeps killing.
+   Each link shows "Chain xn"; long chains play impact frames; the run's longest chain is kept on the card. */
+function dominoArrow(S,p,dead,dealt){
+ const D=S.P.domino,v=D.v,n=(p.chain||0)+1;if(n>v.max)return;let best=null,bd=1e9;
+ for(const e of S.balls)if(e.alive&&e.team===1&&e!==dead){const d=Math.hypot(e.x-p.x,e.y-p.y);if(d<bd){bd=d;best=e}}
+ if(!best)return;
+ const sp=Math.hypot(p.vx,p.vy)||RULES.projectiles.playerSpeed,dx=best.x-p.x,dy=best.y-p.y,d=Math.hypot(dx,dy)||1;
+ p.dead=false;p.chain=n;p.f*=1+v.percent/100;p.vx=dx/d*sp;p.vy=dy/d*sp;p.ang=Math.atan2(dy,dx);p.life=Math.max(p.life,1.5);
+ if(dealt>0&&S.dmgBy)S.dmgBy['boost:domino']=(S.dmgBy['boost:domino']||0)+dealt*(1-Math.pow(1+v.percent/100,-(n-1)));   // breakdown: the extra damage this chain added
+ count(S,'dominoChain');const a=D.a;if(n>(a.f.best||0))a.f.best=n;if(n>(a.n||0))a.n=n;if(S.trig)S.trig.domino=(S.trig.domino||0)+1;if(S.pulses){const i=S.run.augs.indexOf(a);if(i>=0)S.pulses[i]=S.t}
+ fx(S,{k:'zap',x1:dead.x,y1:dead.y,x2:best.x,y2:best.y});if(n>=v.showAt)fx(S,{k:'streak',x:dead.x,y:dead.y,n});
+ if(IMP&&S.juice&&(n===v.heavyAt||n===v.massiveAt)){const L=IMP.levels.map(l=>l.minPercentOfMaxHp).sort((m,k)=>m-k);S.fx.push({k:'impact',pct:n===v.massiveAt?L[L.length-1]:L[0],x:dead.x,y:dead.y,dmg:dealt});S.hold=true}
 }
 function addPoison(S,t,n){if(t.alive&&!(t.ward>S.t)){t.poison+=n;count(S,'poison',n)}}
 /* Chill stacks on an enemy. At ST.chillMax it is Frozen. Frozen enemies take no more Chill until they thaw. */
@@ -723,8 +740,10 @@ function step(S,dt){
    if(w.type==='bow'){
     const tg=nearestFoe(S,b);
     if(tg){let d=Math.atan2(tg.y-b.y,tg.x-b.x)-w.ang;d=Math.atan2(Math.sin(d),Math.cos(d));const mx=Math.max(1.5,w.spin)*1.6*dt*sm;w.ang+=clamp(d,-mx,mx)}
-    if(live&&!(b.frozen>0)){w.ft-=dt;if(w.ft<=0){w.ft=w.every;
-     if(b.team===0)shoot(S,b,w.ang,b.player?1:w.share||1,b.player,1+Math.floor(S.ramp.arrows));
+    if(live&&!(b.frozen>0)){w.ft-=dt;if(w.ft<=0){
+     // your Bow: Spin sets the fire rate (weapon Spin = its listed fireEvery), Reach sets arrow speed, and arrows push with your Knockback
+     const BW=RULES.bow||{},WB=P.W;w.ft=b.team===0?Math.max(BW.minFireEvery||.25,w.every*Math.pow(WB.spin/Math.max(.1,w.spin),BW.spinPower==null?1:BW.spinPower)):w.every;
+     if(b.team===0)shoot(S,b,w.ang,b.player?1:w.share||1,b.player,1+Math.floor(S.ramp.arrows),{arrow:true,spdX:clamp(w.len/Math.max(1,WB.reach),BW.minSpeedX||.5,BW.maxSpeedX||2.5),kb:b.player?P.kb:(w.kb||0)});
      else{const c=Math.cos(w.ang),s=Math.sin(w.ang),PR=RULES.projectiles;S.projs.push({x:b.x+c*(b.r+6),y:b.y+s*(b.r+6),vx:c*PR.enemySpeed,vy:s*PR.enemySpeed,r:5,team:1,pow:w.pow,owner:b,bn:0,life:PR.lifetime,ang:w.ang});snd(S,'shot')}}}
    }else w.ang+=w.spin*w.dir*dt*sm;
   }
@@ -772,7 +791,7 @@ function step(S,dt){
  // projectiles
  for(const p of S.projs){
   if(p.dead)continue;p.life-=dt;if(p.life<=0){p.dead=true;continue}
-  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.arrow)p.d+=Math.hypot(p.vx,p.vy)*dt;   // how far an arrow has flown (Sweet Spot)
   let out=false;
   if(p.x<p.r||p.x>AW-p.r){out=true;if(p.bn>0){p.vx=-p.vx;p.x=clamp(p.x,p.r,AW-p.r)}}
   if(p.y<p.r||p.y>AH-p.r){out=true;if(p.bn>0){p.vy=-p.vy;p.y=clamp(p.y,p.r,AH-p.r)}}
@@ -780,7 +799,7 @@ function step(S,dt){
   for(const sg of segs)if(sg.b.alive&&sg.b.team!==p.team&&dSegPt(sg.s,p.x,p.y)<p.r+sg.w.th+1){p.dead=true;fx(S,{k:'spark',x:p.x,y:p.y});snd(S,'parry');break}
   if(p.dead)continue;
   for(const t of S.balls){if(!t.alive||t.team===p.team)continue;
-   if(Math.hypot(t.x-p.x,t.y-p.y)<t.r+p.r){p.dead=true;if(p.team===0)playerHit(S,t,'proj',p.f,null,p.main);else enemyHit(S,p.owner,t,p.pow);break}}
+   if(Math.hypot(t.x-p.x,t.y-p.y)<t.r+p.r){p.dead=true;if(p.team===0){if(p.kb>0){const sp=Math.hypot(p.vx,p.vy)||1;knockBy(S,t,t.x-p.vx/sp*10,t.y-p.vy/sp*10,p.kb)}S.arrow=p.arrow;S.arrowD=p.d;const dealt=playerHit(S,t,'proj',p.f,null,p.main);S.arrow=false;if(!t.alive&&S.P.domino&&!S.done)dominoArrow(S,p,t,dealt)}else enemyHit(S,p.owner,t,p.pow);break}}
   if(S.done)return;
  }
  if(S.projs.length&&S.projs.some(p=>p.dead))S.projs=S.projs.filter(p=>!p.dead);
