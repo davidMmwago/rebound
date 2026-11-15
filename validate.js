@@ -33,8 +33,10 @@ function validateGameData(D){
  for(const g in need){if(!isObj(R[g])){out.push('rules.'+g+' is missing');continue}for(const k of need[g])num(R[g],k,'rules.'+g)}
  if(isObj(R.arena)&&isNum(R.arena.size)&&R.arena.size<200)out.push('rules.arena.size is too small; keep it at 200 or more');
  if(isObj(R.run)&&isNum(R.run.tiersToWin)&&R.run.tiersToWin<1)out.push('rules.run.tiersToWin must be at least 1');
+ if('knockback' in R){if(!isObj(R.knockback))out.push('rules.knockback must be an object in { }');else for(const k of keys(R.knockback))num(R.knockback,k,'rules.knockback')}
  if('overflow' in R){if(!isObj(R.overflow))out.push('rules.overflow must be an object in { }');else for(const k of keys(R.overflow))num(R.overflow,k,'rules.overflow')}
- if(isObj(R.scaling))for(const k of['endlessHpPerTier','endlessDamagePerTier','endlessAcceleration'])if(k in R.scaling)num(R.scaling,k,'rules.scaling');
+ if('elites' in R){if(!isObj(R.elites))out.push('rules.elites must be an object in { }');else for(const k of keys(R.elites))num(R.elites,k,'rules.elites')}
+ if(isObj(R.scaling))for(const k of['endlessHpPerTier','endlessDamagePerTier','endlessAcceleration','lateFromTier','lateHpPerTier','lateDamagePerTier','firstBossHpPercent'])if(k in R.scaling)num(R.scaling,k,'rules.scaling');
  if(isObj(R.economy)&&isNum(R.economy.interestPerGold)&&R.economy.interestPerGold<=0)out.push('rules.economy.interestPerGold must be more than 0');
 
  // rarities
@@ -54,7 +56,7 @@ function validateGameData(D){
  // weapons
  if(!keys(D.weapons).length)out.push('"weapons" needs at least one weapon');
  for(const k of keys(D.weapons)){const p='weapons.'+k,o=D.weapons[k];if(!isObj(o)){out.push(p+' must be an object');continue}
-  str(o,'name',p);str(o,'blurb',p);str(o,'rampText',p);for(const f of['power','reach','spin','speed','blades'])num(o,f,p);
+  str(o,'name',p);str(o,'blurb',p);str(o,'rampText',p);for(const f of['power','reach','spin','speed','blades'])num(o,f,p);for(const f of['knockback','impact'])if(f in o)num(o,f,p);
   if(!o.fists&&!wt.includes(o.type))out.push(p+'.type is '+show(o.type)+' but must be one of: '+wt.join(', ')+' (or set "fists": true)');
   if(!isObj(o.ramp))out.push(p+'.ramp must be an object');else{for(const f of keys(o.ramp))num(o.ramp,f,p+'.ramp');holes(o.rampText,o.ramp,p+'.rampText')}}
 
@@ -66,9 +68,13 @@ function validateGameData(D){
   if(!isObj(o.values))out.push(p+'.values must be an object in { } (use {} if it has no numbers)');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}
 
  // tune-ups
- for(const k of['hp','pow','spd','spin','reach','armor','crit','regen']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eight tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen');continue}
+ for(const k of['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eleven tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen, knock, impact, mini');continue}if('weight' in o)num(o,'weight',p);
   str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text')}
 
+ // consumables (optional)
+ if('consumables' in D){if(!isObj(D.consumables))out.push('"consumables" must be an object');else for(const k of keys(D.consumables)){const p='consumables.'+k,o=D.consumables[k];if(!isObj(o)){out.push(p+' must be an object');continue}
+  str(o,'name',p);str(o,'text',p);num(o,'cost',p);if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}}
+ if('consumables' in R){if(!isObj(R.consumables))out.push('rules.consumables must be an object');else for(const k of keys(R.consumables))num(R.consumables,k,'rules.consumables')}
  // trophies
  for(const k of keys(D.trophies)){const p='trophies.'+k,o=D.trophies[k];if(!isObj(o)){out.push(p+' must be an object');continue}
   str(o,'name',p);str(o,'text',p);if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}
@@ -83,9 +89,9 @@ function validateGameData(D){
  for(const k of en){const p='enemies.'+k,o=D.enemies[k];if(!isObj(o)){out.push(p+' must be an object');continue}
   body(o,p);num(o,'cost',p);num(o,'minTier',p);if(isNum(o.cost)&&o.cost<=0)out.push(p+'.cost must be more than 0');
   if('splitsInto' in o&&!en.includes(o.splitsInto))out.push(p+'.splitsInto is '+show(o.splitsInto)+' but that is not an enemy id');
-  for(const f of['bombDamage','bombRadius','splitCount','healPerSecond'])if(f in o)num(o,f,p)}
+  for(const f of['bombDamage','bombRadius','splitCount','healPerSecond'])if(f in o)num(o,f,p);if('values' in o){if(!isObj(o.values))out.push(p+'.values must be an object in { }');else for(const f of keys(o.values))num(o.values,f,p+'.values')}if('about' in o&&!isStr(o.about))out.push(p+'.about must be text in quotes')}
  for(const k of bo){const p='bosses.'+k,o=D.bosses[k];if(!isObj(o)){out.push(p+' must be an object');continue}
-  body(o,p);str(o,'rule',p);if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.rule,o.values,p+'.rule')}
+  body(o,p);str(o,'rule',p);if('minTier' in o)num(o,'minTier',p);if('phase2' in o){if(!isStr(o.phase2))out.push(p+'.phase2 must be text in quotes');else holes(o.phase2,o.values,p+'.phase2')}for(const f of['weak','resists'])if(f in o&&!(Array.isArray(o[f])&&o[f].every(isStr)))out.push(p+'.'+f+' must be a list of words in quotes');if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.rule,o.values,p+'.rule')}
   if('spawns' in o&&!en.includes(o.spawns))out.push(p+'.spawns is '+show(o.spawns)+' but that is not an enemy id')}
  D.bossPool.forEach(id=>{if(!bo.includes(id))out.push('bossPool lists '+show(id)+' but there is no boss with that id')});
  if(!D.bossPool.length)out.push('bossPool needs at least one boss id');

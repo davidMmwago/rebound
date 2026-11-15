@@ -42,6 +42,11 @@
    const S=fight(r);if(!isFinite(S.player.hp)||!isFinite(S.dmg))throw new Error('a number went wrong (NaN)');if(!S.done)throw new Error('the fight never ended')}
   catch(e){fails.push(WEAPONS[w].name+' + '+AUG[id].name+' ('+id+'): '+e.message)}
   done++;lines[smokeLine]='Crash check: '+done+' of '+total+' fights, '+fails.length+' failed';pre.textContent=lines.join('\n')});
+ // every boss with every weapon, at tier 3 and with two items switched on, so boss rules and consumables are crash-checked too
+ for(const w of weapons)for(const bid of Object.keys(BOSS))tasks.push(()=>{
+  try{const r=newRun(w,9);r.tier=3;r.stage=2;r.enc={boss:bid,list:['grunt']};r.augs=augs.slice(0,4).map(id=>({id,n:0,f:{}}));const it=Object.keys(typeof ITEM!=='undefined'?ITEM:{});r.bag=it.slice(0,2).map(id=>({id,use:true}));
+   const S=fight(r);if(!isFinite(S.player.hp)||!isFinite(S.dmg))throw new Error('a number went wrong (NaN)');if(!S.done)throw new Error('the fight never ended')}
+  catch(e){fails.push(WEAPONS[w].name+' vs '+BOSS[bid].name+': '+e.message)}});
  tasks.push(()=>{for(const f of fails)out('  FAILED  '+f);out('')});
  // 2. balance check
  const PER=8,goal=RULES.run.tiersToWin,stats={t1:{fight:{n:0,t:0},boss:{n:0,t:0}}},res={},deaths=Array(goal+2).fill(0),killers={};let runs=0;
@@ -60,7 +65,7 @@
   const a=stats.t1.fight,b=stats.t1.boss;
   out('  Average length of a tier 1 fight: '+(a.n?(a.t/a.n).toFixed(1):'?')+'s. Tier 1 boss: '+(b.n?(b.t/b.n).toFixed(1):'?')+'s.');
   out('');
-  out('How to read this: the shipped game scores roughly 10 to 20% wins here, with most runs ending on tiers 5 to 8 and tier 1 fights lasting 10 to 20 seconds.');
+  out('How to read this: the shipped game scores roughly 2 to 8% wins here (the late tiers are tuned for a player who builds on purpose), with most runs ending on tiers 5 to 8 and tier 1 fights lasting 10 to 20 seconds.');
   out('Much higher wins means the game got easier; near 0% means harder. A real player who builds synergies does far better than this bot.');
   out(fails.length?'RESULT: '+fails.length+' crash check failure(s). Fix these before anything else.':'RESULT: no crashes.');
   document.getElementById('selftest-copy').hidden=false;

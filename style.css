@@ -243,3 +243,13 @@ button.step:active:not(:disabled){transform:none;box-shadow:none}
 /* the Your ball card blinks when the player clicks their ball in the shop */
 .card.flash{animation:cardFlash .7s ease-out}
 @keyframes cardFlash{from{box-shadow:0 0 0 3px var(--gold),0 4px 0 var(--drop)}to{box-shadow:0 0 0 3px transparent,0 4px 0 var(--drop)}}
+
+/* damage breakdown on the payout and game over sheets (breakdown() in ui.js) */
+.bd{display:flex;flex-direction:column;gap:4px;border-top:2px dashed var(--line);padding-top:8px}
+.bd summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;color:var(--dim);list-style-position:inside}
+.bd summary b{color:var(--gold);font-family:var(--display);font-weight:400}
+.bd h4{margin:6px 0 0;font-weight:400;font-size:var(--bfs,13.333px);color:var(--dim)}
+.bd h4[data-tip]{cursor:help}
+.bd .pay li{background:linear-gradient(90deg,var(--line) var(--w,0%),transparent var(--w,0%));padding:0 4px}
+.bd .pay small{color:var(--dim);font-family:var(--body);font-size:var(--bfs,13.333px)}
+.bd-rest{margin:4px 0 0;color:var(--dim)}

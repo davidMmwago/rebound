@@ -45,8 +45,8 @@ function applyTheme(){
  document.title=name;
  $('#lblP').textContent=TX.readoutPower;$('#lblM').textContent=TX.readoutMult;$('#lblD').textContent=TX.readoutLast;
 }
-function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=!!p.statsOpen;G.forceMotion=!!p.forceMotion}catch(e){}setMotion()}
-function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion}))}catch(e){}}
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=!!p.statsOpen;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false}catch(e){}setMotion()}
+function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false}))}catch(e){}}
 
 /* Font files (assets.fonts.display and .body), registered under the family names in theme.fonts. Optional font descriptors per role come from
    theme.fonts.displayMetrics and bodyMetrics (ascentOverride and so on: Pixel Game needs them to sit centred in its line). A file that fails falls back to
@@ -115,6 +115,16 @@ function dark(col){if(col in lumCache)return lumCache[col];const h=String(col).r
 function rgba(hex,a){const h=String(hex).replace('#','');return'rgba('+parseInt(h.substr(0,2),16)+','+parseInt(h.substr(2,2),16)+','+parseInt(h.substr(4,2),16)+','+a+')'}
 const RC=i=>'c'+i;
 function encSummary(enc){const m={};for(const id of enc.list){if(!ENEMY[id])continue;m[ENEMY[id].name]=(m[ENEMY[id].name]||0)+1}return Object.keys(m).map(k=>m[k]>1?k+' ×'+m[k]:k).join(', ')}
+/* Planning lines on the next-fight card: what each enemy type does, an elite if there is one, and the next two bosses. */
+function encNotes(enc){const seen=new Set(),out=[];for(const id of enc.list){const e=ENEMY[id];if(!e||seen.has(id)||!e.about)continue;seen.add(id);out.push(`<b>${e.name}</b>: ${rich(e.about)}`)}
+ let h=out.length?`<p class="with">${out.join('<br>')}</p>`:'';
+ if(enc.elite&&ENEMY[enc.list[enc.elite.i]])h=`<p class="rule elite-line">${tpl(TX.eliteLine||'Elite: {mod} {name}',{mod:(TX.eliteNames||{})[enc.elite.mod]||enc.elite.mod,name:ENEMY[enc.list[enc.elite.i]].name})}</p>`+h;
+ return h}
+function bossNotes(b){let h='';if(b.p2)h+=`<p class="with"><b>${TX.phase2Label||'At 50%:'}</b> ${rich(b.p2)}</p>`;
+ const wk=b.weak.length?`<b>${TX.weakTo||'Weak to'}</b> ${rich(b.weak.join(', '))}`:'',rs=b.resists.length?`<b>${TX.resistsLabel||'Resists'}</b> ${rich(b.resists.join(', '))}`:'';
+ if(wk||rs)h+=`<p class="with">${[wk,rs].filter(Boolean).join(' · ')}</p>`;return h}
+function nextBosses(run){const out=[];for(let k=1;k<=2;k++){const id=run.bosses[run.tier-1+k];const b=id&&BOSS[id];if(b)out.push(`<span data-tip="${esc(b.rule+(b.p2?' '+(TX.phase2Label||'At 50%:')+' '+b.p2:''))}">${tpl(TX.tierShort||'T{tier}',{tier:run.tier+k})} ${b.name}</span>`)}
+ return out.length?`<p class="with next-bosses"><b>${TX.nextBosses||'Coming up'}</b> ${out.join(' · ')}</p>`:''}
 const stageName=st=>TX.stageNames[st];
 const previewSeed=run=>({rs:run.rs^0x5bd1e995});
 /* Colours keywords in card text (Power, Mult, Poison...) and money, the way item cards in most games do.
@@ -172,6 +182,9 @@ document.addEventListener('click',e=>{
    const el=$(G.peek==null?'.next [data-act="fight"]':'.next .step.sel');if(el)el.focus({preventScroll:true})}return;
   case'buy':ok=buyOffer(run,i);break;
   case'tune':ok=buyTune(run,i);break;
+  case'item':ok=buyItem(run,i);break;
+  case'item-use':ok=toggleItem(run,i);break;
+  case'item-sell':ok=sellItem(run,i);break;
   case'reroll':ok=reroll(run);break;
   case'sell':{if(performance.now()-G.sellAt<350)return;   // too soon after asking: a long press or a key repeat, not a decision
    const r=b.getBoundingClientRect(),kb=document.activeElement===b;ok=sellAug(run,i);disarmSell();if(ok){sellFx(r.left+r.width/2,r.top+r.height/2);if(kb&&run.augs.length)refocus='#aug'+Math.min(i,run.augs.length-1)}break}
@@ -218,7 +231,7 @@ document.addEventListener('keydown',e=>{
 /* ---------- 5. side panel HTML ---------- */
 function augRow(a,i,run,mode){
  const d=AUG[a.id];if(!d)return'';
- const off=G.S&&G.S.disabled===a&&G.phase!=='payout',warn=mode==='prep'&&i===0&&run.enc.boss&&BOSS[run.enc.boss]&&BOSS[run.enc.boss].code.disablesTopAugment;
+ const off=G.S&&(G.S.off?G.S.off.has(a):G.S.disabled===a)&&G.phase!=='payout',warn=mode==='prep'&&i===0&&run.enc.boss&&BOSS[run.enc.boss]&&BOSS[run.enc.boss].code.disablesTopAugment;
  const shadow=a.id==='mirror'&&a.sh&&AUG[a.sh.id]?a.sh:null,idef=shadow?AUG[shadow.id]:d,info=idef.info?idef.info(shadow||a,idef.v):'';
  let copy='';if(a.id==='mirror'){const nb=run.augs[i+1];copy=nb&&nb.id!=='mirror'&&AUG[nb.id]?t('mirrorCopying',{name:AUG[nb.id].name}):TX.mirrorNothing}
  const prep=mode==='prep',price=prep?sellValue(run,a.id):0,asking=prep&&G.sellArm===a;
@@ -248,7 +261,7 @@ function statBlock(run){
  return `<section class="card" id="yourball"><h3>${TX.yourBall} <span>${W.name}${P.blades>1&&!W.fist?' ×'+P.blades:''}</span></h3>
   <p class="ramp"><b>${TX.rampLabel}</b> ${rich(W.ramp)}${P.rampX>1?' (×'+num(P.rampX)+')':''}. ${TX.rampResets}</p>
   <dl class="stats">${row(N.hp,P.hp)}${row(N.power,num(P.pow))}${row(N.mult,'×'+num(P.mult))}${row(N.crit,Math.round(P.crit*100)+'%')}
-  ${row(N.speed,Math.round(P.spd))}${row(N.spin,num(P.spin))}${row(N.reach,Math.round(P.reach))}${row(N.armor,num(P.armor))}${row(N.regen,num(P.regen)+'/s')}</dl></section>`;
+  ${row(N.speed,Math.round(P.spd))}${row(N.spin,num(P.spin))}${row(N.reach,Math.round(P.reach))}${row(N.armor,num(P.armor))}${row(N.regen,num(P.regen)+'/s')}${row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl></section>`;
 }
 /* The next-fight card. Its tracker shows the tier's three fights (two circles and a diamond). In the shop, the current fight and the ones still ahead are
    buttons: pressing one previews that fight here and in the warm-up (G.peek), and the Fight button becomes "Jump to current". */
@@ -262,8 +275,10 @@ function nextCard(run,mode){
   return `<button class="${cls}" data-act="peek" data-i="${i}" aria-pressed="${i===st}" data-tip="${esc(tip)}"><i></i><span>${lbl}</span></button>`}).join('<b class="step-line" aria-hidden="true"></b>');
  let h=`<section class="card next${b?' is-boss':''}${pk!=null?' peeking':''}"><div class="eyebrow"><span>${TX.chipTier} ${run.tier}${run.endless?' · '+TX.endless:''}</span>${pk!=null?`<span class="peek-tag">${TX.previewTag||'Preview'}</span>`:''}</div>
   <div class="steps">${steps}</div>`;
- if(b)h+=`<h2>${b.name}</h2><p class="rule">${rich(b.rule)}</p>${enc.list.length?`<p class="with">${TX.bossBrings} ${encSummary(enc)}.</p>`:''}`;
- else h+=`<h2>${encSummary(enc)}</h2>`;
+ if(b)h+=`<h2>${b.name}</h2><p class="rule">${rich(b.rule)}</p>${bossNotes(b)}${enc.list.length?`<p class="with">${TX.bossBrings} ${encSummary(enc)}.</p>`:''}`;
+ else h+=`<h2>${encSummary(enc)}</h2>${encNotes(enc)}`;
+ h+=nextBosses(run);
+ if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc(d.desc+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
  if(shop)h+=pk!=null?`<button class="go back" data-act="peek" data-i="${run.stage}" data-primary>${TX.jumpToCurrent||'Jump to current'}</button>`:`<button class="go" data-act="fight" data-primary>${TX.fightButton}</button>`;
  return h+'</section>';
 }
@@ -276,8 +291,11 @@ function shopCard(run){
  h+='</div><div class="tunes">';
  sh.tunes.forEach((tu,i)=>{const d=TUNE[tu.k],c=tuneCost(run,tu.k);
   h+=`<div class="tune${tu.sold?' sold':''}">${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${rich(d.desc)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
+ h+='</div>';
+ if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=CONS.bagSize;h+=`<div class="tunes items">`;
+  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}">${icon('items',o.id)}<div><b>${d.name}</b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
  const int=Math.min(run.intCap,Math.floor(run.gold/E.interestPerGold));
- h+=`</div><div class="shop-f"><button data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} $${sh.reroll}</button><span>${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
+ h+=`<div class="shop-f"><button data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} $${sh.reroll}</button><span>${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
  return h;
 }
 function titlePanel(){
@@ -286,7 +304,7 @@ function titlePanel(){
  if(G.assetErrors.length)h+=`<section class="card warn"><h3>Some files did not load</h3><p>The game is using its built-in look for these. Check the paths in game-data.json:</p><ul>${G.assetErrors.map(s=>`<li>${s}</li>`).join('')}</ul></section>`;
  h+=`<section class="card"><h3>${TX.pickWeapon} <span>${TX.pickWeaponHint}</span></h3><div class="weapons">`;
  for(const k of Object.keys(WEAPONS)){const w=WEAPONS[k];
-  h+=`<button class="weapon" data-act="weapon" data-w="${k}">${icon('weapons',k)}<b>${w.name}</b><span class="wstat">${TX.statNames.power} ${w.pow}${w.fist?'':' · '+TX.statNames.spin+' '+w.spin}</span><span>${w.blurb}</span><span class="wramp">${TX.rampLabel}: ${w.ramp}</span></button>`}
+  h+=`<button class="weapon" data-act="weapon" data-w="${k}">${icon('weapons',k)}<b>${w.name}</b><span class="wstat">${TX.statNames.power} ${w.pow}${w.fist?'':' · '+TX.statNames.spin+' '+w.spin}${w.kb?' · '+(TX.statNames.knock||'Knockback')+' '+w.kb:''}${w.impact?' · '+(TX.statNames.impact||'Impact')+' '+w.impact:''}</span><span>${w.blurb}</span><span class="wramp">${TX.rampLabel}: ${w.ramp}</span></button>`}
  h+=`</div></section><section class="card how"><h3>${TX.howTitle}</h3><p>${rich(TX.howBody)}</p><dl class="gloss">${Object.keys(KDEF).filter(k=>k[0]!=='_').map(k=>`<div><dt${KW[k]?' style="color:'+KW[k]+'"':''}>${k}</dt><dd>${tpl(KDEF[k])}</dd></div>`).join('')}</dl></section>`;
  return h;
 }
@@ -315,6 +333,7 @@ function renderOverlay(){
   h=`<div class="sheet"><div class="eyebrow">${G.phase==='victory'?TX.victoryEyebrow:G.wasBoss?TX.payBossBeaten:TX.payFightWon}</div>
    <h2>${G.phase==='victory'?t('victoryTitle',{boss:bn}):TX.payoutTitle}</h2>
    <ul class="pay">${p.lines.map(l=>`<li><span>${l[0]}</span><b>+$${l[1]}</b></li>`).join('')}<li class="tot"><span>${TX.payoutTotal}</span><b>+$${p.total}</b></li></ul>`;
+  h+=breakdown(G.S,run);
   if(G.phase==='victory')h+=runStats(run)+`<div class="row"><button class="go" data-act="endless" data-primary>${TX.keepGoing}</button><button data-act="title">${TX.newRun}</button></div>`;
   else h+=`<button class="go" data-act="continue" data-primary>${run.pending?TX.pickTrophyButton:TX.toShop}</button>`;
   h+='</div>';
@@ -322,10 +341,29 @@ function renderOverlay(){
   h=`<div class="sheet"><div class="eyebrow">${t('trophyEyebrow',{hp:RULES.player.hpPerBossBeaten})}</div><h2>${TX.trophyTitle}</h2><div class="trophy-pick">${run.pending.map(id=>`<button data-act="trophy" data-id="${id}">${icon('trophies',id)}<b>${TROPHY[id].name}</b><span>${rich(TROPHY[id].desc)}</span></button>`).join('')}</div></div>`;
  }else if(G.phase==='over'){
   const b=run.enc.boss&&BOSS[run.enc.boss];
-  h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}<div class="row"><button class="go" data-act="restart-now" data-primary>${TX.restart||'Restart'}</button><button data-act="title">${TX.newRun}</button></div></div>`;
+  h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}${breakdown(G.S,run)}<div class="row"><button class="go" data-act="restart-now" data-primary>${TX.restart||'Restart'}</button><button data-act="title">${TX.newRun}</button></div></div>`;
  }
  overlay.innerHTML=h;overlay.hidden=!h;
 }
+/* Damage breakdown after a fight (payout, victory and game over). core.js records, for every point of damage, who dealt it (S.dmgBy 'src:' and 'aug:')
+   and how much each boost added to the hits it touched ('boost:'), plus how often each augment triggered (S.trig). Boosts overlap, so the
+   "Added by" column can add up to more than the total. Owned augments that neither dealt nor added damage are listed at the end. */
+function breakdown(S,run){
+ if(!S||!S.dmgBy||!(S.dmg>0))return'';
+ const N=TX.sourceNames||{},W=WEAPONS[run.weapon],B=S.dmgBy,T=S.trig||{},total=S.dmg;
+ const name=k=>{const [g,id]=k.split(':');if(g==='aug'||g==='boost'){const d=AUG[id]||TROPHY[id]||ITEM[id];if(d)return d.name}
+  if(id==='weapon'||(id==='body'&&W.fist)||(id==='proj'&&W.type==='bow'))return W.name;return N[id]||id};
+ const idOf=k=>k.split(':')[1],trig=k=>{const n=T[idOf(k)];return n?' · '+tpl(TX.breakdownTriggered||'{n}×',{n}):''};
+ const rows=(keys,plus)=>keys.map(k=>{const v=B[k],w=Math.min(100,v/total*100);
+  return`<li style="--w:${w.toFixed(1)}%"><span>${name(k)}<small>${trig(k)}</small></span><b>${plus?'+':''}${fmt(v)}${plus?'':`<small> ${Math.round(w)}%</small>`}</b></li>`}).join('');
+ const keys=Object.keys(B).filter(k=>B[k]>=.5),dealt=keys.filter(k=>!k.startsWith('boost:')).sort((a,b)=>B[b]-B[a]),added=keys.filter(k=>k.startsWith('boost:')).sort((a,b)=>B[b]-B[a]);
+ const seen=new Set(keys.map(idOf)),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
+ return`<details class="bd" id="bd"${G.bdOpen!==false?' open':''}><summary>${TX.breakdownTitle||'Damage breakdown'} <b>${fmt(total)}</b></summary>
+  <h4>${TX.breakdownDealt||'Dealt by'}</h4><ul class="pay">${rows(dealt,false)}</ul>
+  ${added.length?`<h4 data-tip="${esc(TX.breakdownAddedTip||'')}">${TX.breakdownAdded||'Added by'}</h4><ul class="pay">${rows(added,true)}</ul>`:''}
+  ${rest.length?`<p class="bd-rest">${TX.breakdownOther||'No damage counted'}: ${rest.join(', ')}</p>`:''}</details>`;
+}
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='bd'){G.bdOpen=e.target.open;savePrefs()}},true);
 function runStats(run,S){
  const s=run.stats,best=Math.max(s.bestHit,S?S.bestHit:0),kills=s.kills+(S?S.kills:0);
  return `<dl class="stats wide"><div><dt>${TX.statFights}</dt><dd>${s.fights}</dd></div><div><dt>${TX.statKills}</dt><dd>${kills}</dd></div><div><dt>${TX.statBestHit}</dt><dd>${fmt(best)}</dd></div><div><dt>${TX.statWeapon}</dt><dd>${WEAPONS[run.weapon].name}</dd></div></dl>`;
@@ -505,6 +543,9 @@ function disarmSell(){
  G.sellArm=null;clearTimeout(G.sellTimer);
  const q=$('#sellq');if(q){const c=q.closest('.acard');q.remove();if(c)c.classList.remove('arming')}   // no redraw here: a click may be in progress
 }
+document.addEventListener('contextmenu',e=>{   // right-click an item in the bag: sell it for half
+ const it=e.target.closest&&e.target.closest('[data-act="item-use"]');if(it&&G.phase==='prep'&&G.run){e.preventDefault();if(sellItem(G.run,+it.dataset.i)){const r=it.getBoundingClientRect();sellFx(r.left+r.width/2,r.top+r.height/2);render()}return}
+});
 document.addEventListener('contextmenu',e=>{
  const row=e.target.closest&&e.target.closest('li.aug[data-drag]');if(!row||G.phase!=='prep')return;
  e.preventDefault();endPress();armSell(+row.dataset.drag);
@@ -590,7 +631,7 @@ function liveStats(S){
 }
 /* Admin panel: test tools for the owner, shown when the Admin button is on. Players never see it, so its labels are plain English in code.
    Each row: [stat key on P, label, multiplier between what is typed and what is stored]. An override replaces the computed stat (see calcPlayer in core.js). */
-const ADM=[['hp','Max HP',1],['pow','Power',1],['mult','Mult',1],['crit','Crit %',100],['critMult','Crit mult',1],['spd','Speed',1],['spin','Spin',1],['reach','Reach',1],['armor','Armor',1],['regen','Regen /s',1]];
+const ADM=[['hp','Max HP',1],['pow','Power',1],['mult','Mult',1],['crit','Crit %',100],['critMult','Crit mult',1],['spd','Speed',1],['spin','Spin',1],['reach','Reach',1],['armor','Armor',1],['regen','Regen /s',1],['kb','Knockback',1],['impact','Impact',1]];
 function adminCard(run){
  if(!G.admin||!run)return'';
  const base=calcPlayer(Object.assign({},run,{override:null}),null),o=run.override||{};
@@ -645,6 +686,7 @@ function drain(S){
    for(let i=0;i<5;i++){let a=base+(i-2)*.45+(Math.random()-.5)*.25,x=e.x,y=e.y;const pts=[[x,y]],n=4+(Math.random()*3|0);
     for(let k=0;k<n;k++){a+=(Math.random()-.5)*.9;const d=14+Math.random()*24;x+=Math.cos(a)*d;y+=Math.sin(a)*d;pts.push([x,y])}cracks.push({pts,c:col,l:.65,m:.65})}
    if(!reduce&&!S.demo&&!S.preview)shake=Math.max(shake,e.shake||RULES.feel.maxShake)}
+  else if(e.k==='streak')floats.push({x:e.x,y:e.y-26,s:tpl(TX.chainStreak||'Chain ×{n}',{n:e.n}),c:TH.page.gold,l:.9,m:.9,z:Math.min(22,11+e.n)});   // Newton's Cradle chains
   else if(e.k==='eat')floats.push({x:AW/2,y:AH*.2,s:tpl(TX.ateText||'{by} ate {name}',{by:e.by,name:e.name})+'  +×'+num(e.gain),c:TH.page.gold,l:2.2,m:2.2,z:13.333,body:true,still:true});   // Maw
   else if(e.k==='spark'){for(let i=0;i<5;i++){const a=Math.random()*TAU,v=60+Math.random()*120;parts.push({x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:.22,m:.22,c:TH.effects.spark,r:1.2})}}
  }
@@ -659,8 +701,22 @@ function drain(S){
  if(S.snd.length){if(!S.demo&&!S.preview){const seen={};let n=0;for(const k of S.snd){if(seen[k])continue;seen[k]=1;play(k);if(++n>=5)break}}S.snd.length=0}
 }
 /* Draws one weapon. Sprite art (if set) points right with the grip at the left edge. */
+/* Boss and enemy rules drawn on the floor: The Eight Ball's pockets, The Furnace's glowing walls, The Glacier's ice. */
+function drawArenaRules(S){
+ if(S.pockets){const r=S.pockets.r;for(const[cx,cy]of[[0,0],[AW,0],[0,AH],[AW,AH]]){ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.fillStyle=INK;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=rgba(TH.page.chalk,.35);ctx.stroke()}}
+ if(S.hotWalls){const a=.35+.2*Math.sin(S.t*8);ctx.fillStyle=rgba(TH.damageText.burn,a);for(const w of S.hotWalls){if(w===0)ctx.fillRect(0,0,6,AH);else if(w===1)ctx.fillRect(AW-6,0,6,AH);else if(w===2)ctx.fillRect(0,0,AW,6);else ctx.fillRect(0,AH-6,AW,6)}}
+ for(const z of S.ice){const q=Math.min(1,z.t/Math.min(1,z.t0));ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,TAU);ctx.fillStyle=rgba(TH.effects.freeze||'#d9f4ff',.22*q);ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=rgba(TH.effects.freeze||'#d9f4ff',.6*q);ctx.stroke()}
+}
+/* Rings over a ball that warn of an enemy's move or show its state: wind-up flash, fuse, a Stabber ready to dodge, an elite, The Bulwark's shield. */
+function drawBallMarks(b,S){
+ if(b.tele>0){ctx.lineWidth=2.5;ctx.strokeStyle=rgba('#ffffff',.5+.5*Math.sin(S.t*40));ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,TAU);ctx.stroke()}
+ if(b.fuse!=null){ctx.lineWidth=2.5;ctx.strokeStyle=rgba(TH.damageText.burn,.6+.4*Math.sin(S.t*30));ctx.beginPath();ctx.arc(b.x,b.y,b.r+4+(1-b.fuse)*6,0,TAU);ctx.stroke()}
+ if(b.kind==='stabber'&&b.ready){ctx.lineWidth=1.2;ctx.strokeStyle=rgba(TH.page.chalk,.7);ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,TAU);ctx.stroke();ctx.setLineDash([])}
+ if(b.elite){ctx.lineWidth=2;ctx.strokeStyle=TH.page.gold;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.5,0,TAU);ctx.stroke()}
+ if(b.shieldOn){const a=Math.atan2(b.vy,b.vx),w=(S.bossDef&&S.bossDef.v.shieldArc)||1.1;ctx.lineCap='round';ctx.lineWidth=8;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle=TH.weapons.shield;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineCap='butt'}
+}
 function drawWeapon(b,w){
- ctx.save();ctx.translate(b.x,b.y);ctx.rotate(w.ang);
+ ctx.save();ctx.translate(b.x,b.y);ctx.rotate(w.ang);if(w.mult>1){ctx.shadowColor=TH.page.gold;ctx.shadowBlur=10}   // a braced Lancer's spear glows
  const r=b.r,e=r+w.len,im=IMG['weapon.'+w.type],C=TH.weapons;
  if(im){
   if(w.type==='bow'){const h=34,wd=h*im.width/im.height;ctx.drawImage(im,r+6-wd/2,-h/2,wd,h)}
@@ -716,6 +772,7 @@ function drawBall(b,S,dt){
  if(b.burn>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.burnRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5.8,-S.t*3,-S.t*3+Math.min(TAU,.6+b.burn*.25));ctx.stroke()}
  if(b.chill>0){const CM=(RULES.status&&RULES.status.chillMax)||10;ctx.lineWidth=2;ctx.strokeStyle=TH.effects.chill||'#a8e6ff';ctx.beginPath();ctx.arc(b.x,b.y,b.r+8.4,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,b.chill/CM));ctx.stroke()}   // Chill: fills toward Freeze
  if(b.frozen>0){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fillStyle=rgba(TH.effects.freeze||'#d9f4ff',.5);ctx.fill();ctx.lineWidth=2.2;ctx.strokeStyle=TH.effects.freeze||'#d9f4ff';ctx.stroke()}   // Frozen: an icy shell
+ drawBallMarks(b,S);
  if(b.inv>0){ctx.lineWidth=2;ctx.strokeStyle=rgba(TH.page.gold,.8);ctx.setLineDash([4,4]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+4,0,TAU);ctx.stroke();ctx.setLineDash([])}
  if(OPT.showHpOnBalls===false||b.r<8)return;
  let fs=Math.max(7,b.r*.84)*DFS,tc=dark(b.col)?TH.page.chalk:TH.page.ink;
@@ -740,6 +797,7 @@ function draw(dt){
  const pl=S.player;
  if(pl.alive&&pl.spd>330){trail.push({x:pl.x,y:pl.y});if(trail.length>12)trail.shift();trail.forEach((q,i)=>{ctx.beginPath();ctx.arc(q.x,q.y,pl.r*(i/12),0,TAU);ctx.fillStyle=rgba(pl.col,i/12*.25);ctx.fill()})}else if(trail.length)trail.shift();
  for(const b of S.balls)if(b.alive&&b.healT&&b.healT.alive){ctx.lineWidth=2;ctx.strokeStyle=rgba(DT.heal,.6);ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.healT.x,b.healT.y);ctx.stroke()}
+ drawArenaRules(S);
  for(const b of S.balls){if(!b.alive)continue;drawBall(b,S,dt);for(const w of b.ws)drawWeapon(b,w)}
  for(const p of S.projs){const im=IMG[p.team===0?'proj.player':'proj.enemy'];ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.ang||0);
   if(im){const L=14,h=L*im.height/im.width;ctx.drawImage(im,-L/2,-h/2,L,h)}
@@ -753,7 +811,8 @@ function draw(dt){
  ctx.setTransform(k,0,0,k,0,0);
  if(S.boss&&!S.preview){let hp=0;for(const b of S.balls)if(b.alive&&b.boss)hp+=b.hp;const q=clamp(hp/S.boss.maxhp,0,1);
   ctx.fillStyle=rgba(INK,.7);ctx.fillRect(60,8,AW-120,9);ctx.fillStyle=TH.page.mult;ctx.fillRect(61,9,(AW-122)*q,7);
-  ctx.font='8px '+FONT_B;ctx.fillStyle=TH.page.chalk;ctx.textAlign='center';ctx.fillText(S.bossDef.name.toUpperCase(),AW/2,24)}
+  ctx.font='8px '+FONT_B;ctx.fillStyle=TH.page.chalk;ctx.textAlign='center';ctx.fillText(S.bossDef.name.toUpperCase(),AW/2,24);
+  if(S.bossNote){ctx.fillStyle=TH.page.gold;ctx.fillText(S.bossNote,AW/2,34)}}   // boss state: armor left, socket switched off, what it resists...
  if(S.overtime>1&&!S.done){ctx.font=10*DFS+'px '+FONT_D;ctx.fillStyle=TH.page.accent;ctx.textAlign='center';ctx.fillText(t('overtime',{mult:S.overtime.toFixed(1)}),AW/2,AH-12)}
  if(S.preview||S.demo){ctx.font='9px '+FONT_B;ctx.fillStyle=rgba(TH.page.chalk,.55);ctx.textAlign='center';ctx.fillText(S.preview?TX.warmup:TX.demo,AW/2,AH-10)}
 }
@@ -771,7 +830,7 @@ function liveDom(){
   const R=S.ramp,N=TX.statNames,bits=[];if(R.pow)bits.push('+'+num(R.pow)+' '+N.power);if(R.mult)bits.push('+'+num(R.mult)+' '+N.mult);if(R.spin>1)bits.push('+'+Math.round((R.spin-1)*100)+'% '+N.spin);if(R.reach)bits.push('+'+Math.round(R.reach)+' '+N.reach);if(R.arrows>=1)bits.push('+'+Math.floor(R.arrows)+' '+TX.arrows);if(R.spd>0)bits.push('+'+Math.round(R.spd*100)+'% '+N.speed);if(R.crit>0)bits.push('+'+Math.round(R.crit*100)+'% '+N.crit);
   $('#rampline').innerHTML='<b>'+TX.rampLabel+'</b> '+(bits.length?rich(bits.join(', ')):TX.rampNothing)+(S.chill<1?' · '+t('chilled',{percent:Math.round(S.chill*100)}):'')}
  if(G.phase!=='fight')return;
- run.augs.forEach((a,i)=>{const el=document.getElementById('aug'+i);if(!el)return;el.classList.toggle('on',S.pulses[i]!=null&&S.t-S.pulses[i]<.3);
+ run.augs.forEach((a,i)=>{const el=document.getElementById('aug'+i);if(!el)return;if(S.off)el.classList.toggle('off',S.off.has(a));el.classList.toggle('on',S.pulses[i]!=null&&S.t-S.pulses[i]<.3);
   const sh=a.id==='mirror'&&a.sh&&AUG[a.sh.id]?a.sh:null,d=AUG[sh?sh.id:a.id],lv=document.getElementById('lv'+i);if(lv&&d&&d.live){const s=d.live(sh||a,S,d.v)||'';if(lv.textContent!==s)lv.textContent=s}});
 }
 
