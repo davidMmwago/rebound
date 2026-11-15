@@ -204,7 +204,7 @@ const AUG_CODE={
  handle:{stats(a,S,P,v){P.reach*=1+v.percent/100}},
  combo:{onHit(a,S,c,v){if(S.t-(a.f.t==null?-9:a.f.t)<v.window)a.f.m=(a.f.m||0)+v.mult;else a.f.m=0;a.f.t=S.t;if(a.f.m){c.mult+=a.f.m;return true}},live:(a,S,v)=>a.f.m&&S.t-a.f.t<v.window?'+'+f1(a.f.m)+' '+DATA.text.statNames.mult:''},
  twin:{stats(a,S,P,v){if(P.W.fist)P.pow+=v.fistPower;else P.blades+=v.blades}},
- centri:{onHit(a,S,c,v){const w=S.player.ws[0];if(w&&w.spin>0){c.power+=w.spin*v.power;return true}}},
+ centri:{onHit(a,S,c,v){const w=S.player.ws[0];if(w&&w.spin>0){c.power+=Math.min(v.max,w.spin*v.power);return true}},live:(a,S,v)=>{const w=S.player.ws[0];return w&&w.spin>0?'+'+f1(Math.round(Math.min(v.max,w.spin*v.power)*10)/10):''}},   // capped at max
  parry:{onParry(a,S,e,v){playerHit(S,e,'aoe',v.powerPercent/100);return true}},
  glass:{stats(a,S,P,v){P.hp*=v.hpPercent/100},onHit(a,S,c,v){c.mult*=v.mult;return true}},
  // crit
