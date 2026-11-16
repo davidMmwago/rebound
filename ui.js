@@ -45,8 +45,8 @@ function applyTheme(){
  document.title=name;
  $('#lblP').textContent=TX.readoutPower;$('#lblM').textContent=TX.readoutMult;$('#lblD').textContent=TX.readoutLast;
 }
-function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=!!p.statsOpen;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false}catch(e){}setMotion()}
-function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false}))}catch(e){}}
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=!!p.statsOpen;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
+function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false,light:G.lightChosen?lightMode:undefined}))}catch(e){}}
 
 /* Font files (assets.fonts.display and .body), registered under the family names in theme.fonts. Optional font descriptors per role come from
    theme.fonts.displayMetrics and bodyMetrics (ascentOverride and so on: Pixel Game needs them to sit centred in its line). A file that fails falls back to
@@ -71,7 +71,10 @@ function loadAssets(){
  loadImg('floor',I.arenaFloor);
  for(const k of Object.keys(AS.sounds||{})){const src=AS.sounds[k];if(!src||k[0]==='_')continue;const a=new Audio();a.preload='auto';a.addEventListener('error',()=>{delete SND[k];assetFail(src)});a.src=src;SND[k]=a}
 }
-document.addEventListener('error',e=>{const el=e.target;if(el&&el.tagName==='IMG'&&el.classList.contains('icon')){assetFail(el.getAttribute('src'));el.remove()}},true);
+/* A picture on a card failed. Redrawing the side panel while pictures are still loading can cancel a download and report a false error, so the file is
+   tried once more on its own before it is listed as missing. */
+document.addEventListener('error',e=>{const el=e.target;if(!el||el.tagName!=='IMG'||!el.classList.contains('icon'))return;const src=el.getAttribute('src');
+ const t=new Image();t.onload=()=>{};t.onerror=()=>{assetFail(src);if(el.isConnected)el.remove()};t.src=src},true);
 function icon(group,id){const m=AS.images.icons&&AS.images.icons[group],src=m&&m[id];return src?'<img class="icon" src="'+src+'" alt="">':''}
 
 /* Sound: an uploaded file in DATA.assets.sounds wins; otherwise a short synthesised tone plays. */
@@ -197,6 +200,7 @@ document.addEventListener('click',e=>{
   case'title':toTitle();return;
   case'speed':G.speed=+b.dataset.v;savePrefs();renderCtl();{const n=$('#adm-note');if(n)n.textContent=impactNote()}return;
   case'pause':G.paused=!G.paused;renderCtl();return;
+  case'light':lightMode=lightMode==='full'?'simple':'full';G.lightChosen=true;flashes=[];savePrefs();renderCtl();return;
   case'mute':G.muted=!G.muted;if(!G.muted)audioOn();else syncMusic();savePrefs();renderCtl();return;
   case'stats':{G.statsOpen=!G.statsOpen;savePrefs();const f=$('#livestats');if(f)f.classList.toggle('open',G.statsOpen);b.setAttribute('aria-expanded',G.statsOpen);return}
   case'admin':G.admin=!G.admin;savePrefs();render();return;
@@ -319,7 +323,8 @@ function fightPanel(run){
 function renderCtl(){
  $('#speed').innerHTML=[1,2,4,8].map(v=>`<button data-act="speed" data-v="${v}" aria-pressed="${G.speed===v}">${v}×</button>`).join('');
  $('#pause').textContent=G.paused?TX.resume:TX.pause;$('#pause').setAttribute('aria-pressed',G.paused);
- $('#mute').textContent=G.muted?TX.soundOff:TX.soundOn;$('#mute').setAttribute('aria-pressed',!G.muted);
+ $('#mute').textContent=G.muted?TX.soundOff:TX.soundOn;
+ {const lb=$('#light');if(lb){lb.textContent=lightMode==='full'?(TX.lightFull||'Lighting: Full'):(TX.lightSimple||'Lighting: Simple');lb.setAttribute('aria-pressed',lightMode==='full')}}$('#mute').setAttribute('aria-pressed',!G.muted);
  const rb=$('#restart');if(rb){rb.hidden=!G.run;rb.classList.toggle('armed',!!G.restartArmed);rb.setAttribute('data-tip',TX.restartHint||'Hold R to restart');$('#restart-label').textContent=G.restartArmed?(TX.restartConfirm||'Restart run?'):(TX.restart||'Restart')}
  const ab=$('#admin');if(ab){ab.hidden=!!(DATA.admin&&DATA.admin.showToggle===false);ab.textContent=TX.adminButton||'Admin';ab.setAttribute('aria-pressed',G.admin)}
 }
@@ -703,10 +708,10 @@ const INK=TH.arena.outline;
 function drain(S){
  for(const e of S.fx){
   if(e.k==='burst'){for(let i=0;i<e.n;i++){const a=Math.random()*TAU,v=40+Math.random()*160;parts.push({x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:.5,m:.5,c:e.col,r:1.5+Math.random()*2.5})}}
-  else if(e.k==='ring')rings.push({x:e.x,y:e.y,r:e.r,c:e.col,l:.35,m:.35});
-  else if(e.k==='zap')zaps.push({x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,l:.16});
-  else if(e.k==='impact'){if(!S.demo&&!S.preview)Impact.trigger(e)}
-  else if(e.k==='quake'){   // Earthquake: two ripples and a few cracks running in from the wall that was hit, plus a shake in real fights
+  else if(e.k==='ring'){rings.push({x:e.x,y:e.y,r:e.r,c:e.col,l:.35,m:.35});if(e.r>=70)addFlash('blast',e.x,e.y,Math.min(2,e.r/120),e.col);else addFlash('glint',e.x,e.y,1,e.col)}
+  else if(e.k==='zap'){zaps.push({x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,l:.16});addFlash(e.y1===0?'lightning':'spark',e.x2,e.y2)}   // a strike from the sky dims the room
+  else if(e.k==='impact'){if(!S.demo&&!S.preview){Impact.trigger(e)}}   // impact frames stay as they were: no light flash
+  else if(e.k==='quake'){addFlash('quake',e.x,e.y);   // Earthquake: two ripples and a few cracks running in from the wall that was hit, plus a shake in real fights
    const col=TH.effects.quake||TH.effects.spark,base=Math.atan2(AH/2-e.y,AW/2-e.x);
    rings.push({x:e.x,y:e.y,r:AW*.95,c:col,l:.55,m:.55},{x:e.x,y:e.y,r:AW*.5,c:col,l:.38,m:.38});
    for(let i=0;i<5;i++){let a=base+(i-2)*.45+(Math.random()-.5)*.25,x=e.x,y=e.y;const pts=[[x,y]],n=4+(Math.random()*3|0);
@@ -738,11 +743,15 @@ function drawBallMarks(b,S){
  if(b.tele>0){ctx.lineWidth=2.5;ctx.strokeStyle=rgba('#ffffff',.5+.5*Math.sin(S.t*40));ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,TAU);ctx.stroke()}
  if(b.fuse!=null){ctx.lineWidth=2.5;ctx.strokeStyle=rgba(TH.damageText.burn,.6+.4*Math.sin(S.t*30));ctx.beginPath();ctx.arc(b.x,b.y,b.r+4+(1-b.fuse)*6,0,TAU);ctx.stroke()}
  if(b.kind==='stabber'&&b.ready){ctx.lineWidth=1.2;ctx.strokeStyle=rgba(TH.page.chalk,.7);ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,TAU);ctx.stroke();ctx.setLineDash([])}
- if(b.elite){ctx.lineWidth=2;ctx.strokeStyle=TH.page.gold;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.5,0,TAU);ctx.stroke()}
+ if(b.elite){ctx.lineWidth=1.2;ctx.strokeStyle=TH.page.gold;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.5,0,TAU);ctx.stroke()}
  if(b.shieldOn){const a=Math.atan2(b.vy,b.vx),w=(S.bossDef&&S.bossDef.v.shieldArc)||1.1;ctx.lineCap='round';ctx.lineWidth=8;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle=TH.weapons.shield;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineCap='butt'}
 }
 function drawWeapon(b,w){
- ctx.save();ctx.translate(b.x,b.y);ctx.rotate(w.ang);if(w.mult>1){ctx.shadowColor=TH.page.gold;ctx.shadowBlur=10}   // a braced Lancer's spear glows
+ ctx.save();
+ if(w.mult>1){ctx.shadowColor=TH.page.gold;ctx.shadowBlur=10}   // a braced Lancer's spear glows
+ else if(BL.weaponShadow&&BL.shadow){const L=sampleLight(b).dir,k=cv.width/AW,o=(BL.weaponShadowOffset||5)*k;ctx.shadowColor=rgba('#000000',BL.shadowOpacity);ctx.shadowBlur=0;ctx.shadowOffsetX=-L.x*o;ctx.shadowOffsetY=-L.y*o}   // the weapon's shadow on the floor, away from the light
+ if(BL.weaponLight&&CAN_FILTER){const L=sampleLight(b).dir,f=1+(BL.weaponLight||0)*(Math.cos(w.ang)*L.x+Math.sin(w.ang)*L.y);if(Math.abs(f-1)>.01)ctx.filter='brightness('+f.toFixed(3)+')'}   // brighter when it points toward the light
+ ctx.translate(b.x,b.y);ctx.rotate(w.ang);
  const r=b.r,e=r+w.len,im=IMG['weapon.'+w.type],C=TH.weapons;
  if(im){
   if(w.type==='bow'){const h=34,wd=h*im.width/im.height;ctx.drawImage(im,r+6-wd/2,-h/2,wd,h)}
@@ -782,18 +791,170 @@ function ballShape(b,dt){
  const s=1+SQ.maxStretch*k;return{a:Math.atan2(b.vy,b.vx),sx:s,sy:1/s};
 }
 /* Draws one ball: sprite or coloured circle (squashed or stretched when it is fast), status rings, then the HP number. */
-function drawBall(b,S,dt){
- const im=IMG['ball.'+b.kind],A=TH.arena,sh=ballShape(b,dt||0);
- if(sh){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(sh.a);ctx.scale(sh.sx,sh.sy);ctx.rotate(-sh.a);ctx.translate(-b.x,-b.y)}
+/* ---------- ball look: stepped shading, floor shadows, a rolling stripe, and a light that follows the mouse ----------
+   Settings: theme.ballLook. The light sits wherever the mouse is on the page (the same pointer that lights the augment cards), so every ball is
+   lit from the side the mouse is on and casts its shadow the other way. With no mouse (touch, or before it moves) the light is top left.
+   A ball with its own sprite (assets.images.balls) keeps the sprite and only gets the floor shadow. */
+const BL=Object.assign({shading:true,shadow:true,stripe:true,mouseLight:true,shadowOpacity:.42,stripeOpacity:.55,highlight:true},TH.ballLook||{});
+const SHADES={},CAN_FILTER='filter' in ctx;
+/* Pixel layer: shadows, ball bodies and light pools are drawn on a small canvas (one pixel = PXL arena units) and scaled up without smoothing,
+   so shading steps, the highlight, the outline and the mouse light come out as chunky pixels like the card frames. 0 = off (smooth). */
+const PXL=BL.pixelArt===false?0:(+BL.pixel||1.5);
+let pix=null,pg=null,lpix=null,lpg=null;
+function pixLayer(){if(!pix){pix=document.createElement('canvas');pix.width=Math.ceil(AW/PXL);pix.height=Math.ceil(AH/PXL);pg=pix.getContext('2d')}
+ pg.setTransform(1,0,0,1,0,0);pg.clearRect(0,0,pix.width,pix.height);pg.setTransform(1/PXL,0,0,1/PXL,0,0);pg.imageSmoothingEnabled=false;return pg}
+/* Pixel pass: shadows and ball bodies are worked out pixel by pixel on the small layer, so every edge is hard: no blended in-between colours.
+   Same rules as the smooth drawing: tones stepped toward the light, a highlight, a coloured tint from the strongest nearby light, a 1 or 2 pixel
+   outline (2 for your ball and bosses), the hit flash, and squash and stretch. Balls with their own sprite are left to drawTop(). */
+const RGB={};
+function rgbOf(c){if(RGB[c])return RGB[c];let m=/^#?([0-9a-f]{6})$/i.exec(c);let v;if(m)v=[0,2,4].map(i=>parseInt(m[1].substr(i,2),16));else{m=/rgba?\(([^)]+)\)/.exec(c);v=m?m[1].split(',').slice(0,3).map(Number):[255,255,255]}return RGB[c]=v}
+let pbuf=null,p32=null,pimg=null;
+function pixelPass(S,dt){
+ const L_=pixLayer(),W=pix.width,H=pix.height,P=PXL;
+ if(!pimg||pimg.width!==W){pimg=L_.createImageData(W,H);pbuf=pimg.data;p32=new Uint32Array(pbuf.buffer)}
+ p32.fill(0);
+ const put=(i,r,g,b)=>{p32[i]=(255<<24)|(b<<16)|(g<<8)|r};
+ // shadows (alpha only, black); the strongest wins where two overlap
+ if(BL.shadow)for(const b of S.balls){if(!b.alive)continue;const sh=shadowsFor(b);
+  for(const[cx,cy,ra,rb,an,al]of sh){const A=Math.round(al*255);if(A<4)continue;const ca=Math.cos(an),sa=Math.sin(an),R_=Math.max(ra,rb);
+   const x0=Math.max(0,Math.floor((cx-R_)/P)),x1=Math.min(W-1,Math.ceil((cx+R_)/P)),y0=Math.max(0,Math.floor((cy-R_)/P)),y1=Math.min(H-1,Math.ceil((cy+R_)/P));
+   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const dx=(x+.5)*P-cx,dy=(y+.5)*P-cy,u=(dx*ca+dy*sa)/ra,v=(-dx*sa+dy*ca)/rb;if(u*u+v*v>1)continue;const i=y*W+x,cur=p32[i]>>>24;if(A>cur)p32[i]=A<<24}}}
+ // ball bodies
+ const A_=TH.arena;
+ for(const b of S.balls){if(!b.alive||IMG['ball.'+b.kind])continue;
+  const C=shades(b.col),D=rgbOf(C.dark),M=rgbOf(C.mid),B=rgbOf(C.base),Lt=rgbOf(C.lit),ls=sampleLight(b),L=ls.dir,r=b.r,sh=b._sh;
+  const OC=rgbOf(b.player?A_.playerOutline:b.boss?A_.bossOutline:A_.outline),ow=P;   // one pixel for every ball
+  const mx=b.x+L.x*r*.16,my=b.y+L.y*r*.16,bx=b.x+L.x*r*.3,by=b.y+L.y*r*.3,hx=b.x+L.x*r*.45,hy=b.y+L.y*r*.45,wx=hx+L.x*r*.04,wy=hy+L.y*r*.04,hr=Math.max(r*.2,P*.9),wr=Math.max(r*.08,P*.55);
+  const T=ls.top,tA=T&&T.w>.05?Math.min(.32,T.w*.16):0,TC=tA?rgbOf(T.col):null,tx=T?b.x+T.x*r*.55:0,ty=T?b.y+T.y*r*.55:0,fl=b.flash>0;
+  const ca=sh?Math.cos(sh.a):1,sa=sh?Math.sin(sh.a):0,sx=sh?sh.sx:1,sy=sh?sh.sy:1,ext=r*Math.max(sx,sy)+P;
+  const x0=Math.max(0,Math.floor((b.x-ext)/P)),x1=Math.min(W-1,Math.ceil((b.x+ext)/P)),y0=Math.max(0,Math.floor((b.y-ext)/P)),y1=Math.min(H-1,Math.ceil((b.y+ext)/P));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+   let dx=(x+.5)*P-b.x,dy=(y+.5)*P-b.y;
+   if(sh){const u=(dx*ca+dy*sa)/sx,v=(-dx*sa+dy*ca)/sy;dx=u*ca-v*sa;dy=u*sa+v*ca}   // back into the ball's round shape
+   const d=Math.hypot(dx,dy);if(d>r)continue;
+   const px=b.x+dx,py=b.y+dy,i=y*W+x;
+   if(d>r-ow){put(i,OC[0],OC[1],OC[2]);continue}
+   let c=D;if(BL.shading){if(Math.hypot(px-mx,py-my)<r*.96)c=M;if(Math.hypot(px-bx,py-by)<r*.76)c=B;
+    if(BL.highlight){if(Math.hypot(px-hx,py-hy)<hr)c=Lt;if(Math.hypot(px-wx,py-wy)<wr)c=[255,255,255]}}else c=rgbOf(b.col);
+   let R0=c[0],G0=c[1],B0=c[2];
+   if(tA&&Math.hypot(px-tx,py-ty)<r*.85){R0=Math.min(255,R0+TC[0]*tA);G0=Math.min(255,G0+TC[1]*tA);B0=Math.min(255,B0+TC[2]*tA)}
+   if(fl){R0+=(255-R0)*.8;G0+=(255-G0)*.8;B0+=(255-B0)*.8}
+   put(i,R0|0,G0|0,B0|0)}}
+ pg.putImageData(pimg,0,0);ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(pix,0,0,AW,AH);ctx.restore();
+}
+/* Pixel effects: particles, rings, lightning, cracks and the speed trail are drawn as squares on the same grid as the pixel layer (PXL),
+   each grid square at most once per shape, so they read as pixel art and fade evenly. */
+const pxSnap=v=>Math.floor(v/PXL)*PXL;
+function pxFill(keys,w,col){ctx.fillStyle=col;const s=w*PXL;for(const k of keys){const i=k.indexOf(',');ctx.fillRect(+k.slice(0,i)*PXL,+k.slice(i+1)*PXL,s,s)}}
+function pxDotKey(set,x,y){set.add(Math.floor(x/PXL)+','+Math.floor(y/PXL))}
+function pxLine(set,x1,y1,x2,y2){const n=Math.max(1,Math.ceil(Math.hypot(x2-x1,y2-y1)/(PXL*.7)));for(let i=0;i<=n;i++){const q=i/n;pxDotKey(set,x1+(x2-x1)*q,y1+(y2-y1)*q)}}
+function pxRing(set,x,y,r){const n=Math.max(8,Math.ceil(TAU*r/(PXL*.7)));for(let i=0;i<n;i++){const a=i/n*TAU;pxDotKey(set,x+Math.cos(a)*r,y+Math.sin(a)*r)}}
+function pxDisc(set,x,y,r){const R_=Math.max(r,PXL*.5);for(let gy=Math.floor((y-R_)/PXL);gy<=Math.floor((y+R_)/PXL);gy++)for(let gx=Math.floor((x-R_)/PXL);gx<=Math.floor((x+R_)/PXL);gx++)if(Math.hypot((gx+.5)*PXL-x,(gy+.5)*PXL-y)<=R_)set.add(gx+','+gy)}
+function lightLayer(){if(!lpix){lpix=document.createElement('canvas');lpix.width=Math.ceil(AW/PXL);lpix.height=Math.ceil(AH/PXL);lpg=lpix.getContext('2d')}
+ lpg.setTransform(1,0,0,1,0,0);lpg.clearRect(0,0,lpix.width,lpix.height);lpg.setTransform(1/PXL,0,0,1/PXL,0,0);return lpg}
+function mixHex(a,b,t){const h=x=>{x=String(x).replace('#','');return[0,2,4].map(i=>parseInt(x.substr(i,2),16))},A=h(a),B=h(b);return'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
+function shades(col){return SHADES[col]||(SHADES[col]={dark:mixHex(col,'#140a1e',.45),mid:mixHex(col,'#140a1e',.18),base:col,lit:mixHex(col,'#ffffff',.3),band:mixHex(col,'#ffffff',.55)})}
+let lightPt=null,lightAt={x:-AW*.4,y:-AH*.6};   // lightPt: where the mouse is, in arena units; lightAt eases toward it
+document.addEventListener('pointermove',e=>{if(e.pointerType==='touch'||!BL.mouseLight)return;const r=cv.getBoundingClientRect();if(!r.width)return;lightPt={x:(e.clientX-r.left)/r.width*AW,y:(e.clientY-r.top)/r.height*AH}});
+document.documentElement.addEventListener('pointerleave',()=>{lightPt=null});
+function stepLight(dt){const t=lightPt||{x:-AW*.4,y:-AH*.6},k=1-Math.exp(-dt*(BL.lightEase||3));lightAt.x+=(t.x-lightAt.x)*k;lightAt.y+=(t.y-lightAt.y)*k}   // eases toward the mouse
+/* The light hangs lightHeight above the table, so a ball right under the mouse is lit from straight above (centred highlight, shadow underneath)
+   and the lighting turns smoothly as the mouse passes over a ball instead of flipping. Returns the sideways part of the light direction (length 0 to 1). */
+function lightDir(b){const dx=lightAt.x-b.x,dy=lightAt.y-b.y,h=BL.lightHeight||120,d=Math.hypot(dx,dy,h);return{x:dx/d,y:dy/d}}
+/* ---------- lighting (theme.lighting) ----------
+   Two modes. 'simple' is one light: the mouse (or top left). 'full' adds lights from the fight: short flashes (lightning, blasts, Earthquake, impact
+   frames) and glows that follow things (burning or frozen balls, some bosses, warning marks). Lightning briefly dims the whole arena so its light and
+   the shadows it throws stand out. Every ball, shadow and weapon reads the same per-ball sample (b._ls), so anything drawn later can join in.
+   The mode is a header button and is remembered; if full lighting makes frames slow, the game drops to simple once and says so. */
+const LT=Object.assign({mode:'full',ambient:0,maxDim:.6,autoSimpleMs:14,flashes:{},glows:{},bossGlow:{}},TH.lighting||{});
+let lightMode=LT.mode==='simple'?'simple':'full',flashes=[],frameL=[],dimNow=0,frameNo=0;
+/* A short light from something that happened: kind is a key of theme.lighting.flashes; col overrides its colour, scale its strength. */
+function addFlash(kind,x,y,scale,col){const f=LT.flashes[kind];if(!f||lightMode!=='full'||flashes.length>24)return;const k=scale||1;
+ flashes.push({x,y,h:f.height||60,col:col||f.color,i:f.intensity*k,r:f.radius*Math.sqrt(k),l:f.life,m:f.life,dim:(f.dim||0)*(reduce?.35:1)})}
+/* Builds this frame's lights: live flashes (fading) and glows from balls, the boss and warning marks. Sets dimNow. */
+function frameLights(S,dt){
+ frameNo++;frameL=[];dimNow=0;if(lightMode!=='full')return;
+ for(let i=flashes.length-1;i>=0;i--){const f=flashes[i];f.l-=dt;if(f.l<=0){flashes.splice(i,1);continue}const q=f.l/f.m,e=q*q;frameL.push({x:f.x,y:f.y,h:f.h,col:f.col,i:f.i*e,r:f.r,flash:1});dimNow=Math.max(dimNow,f.dim*e)}
+ dimNow=Math.min(LT.maxDim,dimNow);
+ const G_=LT.glows;
+ for(const b of S.balls){if(!b.alive)continue;
+  if(b.burn>0&&G_.burn)frameL.push({x:b.x,y:b.y,h:G_.burn.height||30,col:G_.burn.color,i:Math.min(G_.burn.max||1,G_.burn.intensity+(G_.burn.perStack||0)*b.burn),r:G_.burn.radius+b.r,src:b});
+  if(b.frozen>0&&G_.frozen)frameL.push({x:b.x,y:b.y,h:G_.frozen.height||30,col:G_.frozen.color,i:G_.frozen.intensity,r:G_.frozen.radius+b.r,src:b});
+  const bg=b.boss&&LT.bossGlow[b.kind];if(bg)frameL.push({x:b.x,y:b.y,h:bg.height||40,col:bg.color,i:bg.intensity,r:bg.radius+b.r,src:b})}
+ if(G_.mark)for(const m of S.marks){const q=1-m.t/(m.t0||1);frameL.push({x:m.x,y:m.y,h:G_.mark.height||40,col:m.src&&m.src.col||G_.mark.color,i:G_.mark.intensity*q,r:G_.mark.radius+m.r})}
+}
+/* How one ball is lit this frame: dir (sideways light direction, length 0 to 1) for shading and the key shadow, key (how strong the mouse light still
+   is, lower while lightning dims the room), and the strongest other light (top) for a second shadow and a coloured tint. Cached per frame. */
+function sampleLight(b){
+ if(b._lf===frameNo&&b._ls)return b._ls;
+ const K=lightDir(b),kw=1-dimNow*.85;let vx=K.x*kw,vy=K.y*kw,W=kw,top=null,tw=0;
+ for(const L of frameL){if(L.src===b)continue;const dx=L.x-b.x,dy=L.y-b.y,dd=Math.hypot(dx,dy),f=1-dd/L.r;if(f<=0)continue;const w=L.i*f*f;if(w<.02)continue;
+  const n=Math.hypot(dx,dy,L.h);vx+=dx/n*w;vy+=dy/n*w;W+=w;if(w>tw){tw=w;top={x:dx/n,y:dy/n,w,col:L.col,h:L.h,lx:L.x,ly:L.y}}}
+ const ls={dir:{x:vx/Math.max(W,1e-6),y:vy/Math.max(W,1e-6)},key:kw,top};b._ls=ls;b._lf=frameNo;return ls}
+/* After balls and projectiles: the dimmed room, then each light added on top as a soft pool of its colour. Effects drawn after this stay bright. */
+function drawLightPass(){
+ if(lightMode!=='full'||Impact.active)return;   // an impact frame shows the plain scene, as before the lighting
+ const a=Math.min(.85,(LT.ambient||0)+dimNow);
+ if(a>.01){ctx.fillStyle=rgba('#05030a',a);ctx.fillRect(0,0,AW,AH)}
+ if(!frameL.length)return;const c=PXL?lightLayer():ctx;c.save();c.globalCompositeOperation='lighter';
+ for(const L of frameL){const al=Math.min(.55,L.i*(L.flash?.22:.14));if(al<.01)continue;const g=c.createRadialGradient(L.x,L.y,0,L.x,L.y,L.r);g.addColorStop(0,rgba(L.col,al));g.addColorStop(.35,rgba(L.col,al*.55));g.addColorStop(1,rgba(L.col,0));c.fillStyle=g;c.fillRect(L.x-L.r,L.y-L.r,L.r*2,L.r*2)}
+ c.restore();if(PXL){ctx.save();ctx.globalCompositeOperation='lighter';ctx.imageSmoothingEnabled=false;ctx.drawImage(lpix,0,0,AW,AH);ctx.restore()}}
+let drawMs=0,slowFor=0;
+function watchFrame(ms,dt){drawMs+=(ms-drawMs)*.05;if(lightMode!=='full'||G.lightChosen||G.phase!=='fight')return;slowFor=drawMs>LT.autoSimpleMs?slowFor+dt:0;
+ if(slowFor>3){lightMode='simple';G.lightAuto=true;flashes=[];renderCtl();const n=$('#notice');if(n){n.hidden=false;n.textContent=TX.lightAutoSimple||'Frames were slow, so lighting switched to Simple. Change it with the Lighting button.';setTimeout(()=>{n.hidden=true},6000)}}}
+/* Floor shadows go under every ball before any ball is drawn, so a shadow never covers a neighbour. */
+/* The shadows one ball casts this frame: [centreX, centreY, long radius, short radius, angle, opacity]. A ball's shadow starts under it and stretches
+   away from each light: the further the light is to the side (compared with its height), the longer and fainter the shadow; with the light right
+   above, it is a round dark patch under the ball. The strongest nearby light (flash or glow)
+   adds a second shadow the same way. */
+function shadowsFor(b){
+ const ls=sampleLight(b),out=[],k=(BL.shadowLength||.5)*2;
+ const cast=(lx,ly,h,al)=>{const dx=b.x-lx,dy=b.y-ly,hd=Math.hypot(dx,dy),ux=hd>.01?dx/hd:.6,uy=hd>.01?dy/hd:.8;
+  const len=b.r*Math.min(2.8,Math.max(.12,hd/h))*k,ang=Math.atan2(uy,ux),fade=1/(1+hd/(h*4)),a=al*(.55+.45*fade);
+  const cx=b.x+ux*len*.5,cy=b.y+uy*len*.5;
+  out.push([cx,cy,b.r*.95+len*.46,b.r*.86,ang,a*.85])};
+ if(ls.key>.02)cast(lightAt.x,lightAt.y,BL.lightHeight||120,BL.shadowOpacity*ls.key);
+ const T=ls.top;if(T&&T.w>.12)cast(T.lx,T.ly,Math.max(15,T.h),Math.min(.6,T.w*.45));
+ return out}
+function drawShadows(S,g){
+ if(!BL.shadow)return;
+ for(const b of S.balls){if(!b.alive)continue;for(const[cx,cy,ra,rb,an,al]of shadowsFor(b)){g.fillStyle=rgba('#000000',Math.min(.85,al));g.beginPath();g.ellipse(cx,cy,ra,rb,an,0,TAU);g.fill()}}
+}
+/* The ball itself: three flat tones stepped toward the light, a stripe that rolls with the distance travelled, and a hard highlight. */
+function shadeBall(b,dt,g){
+ const C=shades(b.col),ls=sampleLight(b),L=ls.dir,r=b.r;
+ if(dt>0){const sp=Math.hypot(b.vx,b.vy);if(sp>1){b.roll=(b.roll||0)+sp*dt/r;b.rollA=Math.atan2(b.vy,b.vx)}}
+ g.save();g.beginPath();g.arc(b.x,b.y,r,0,TAU);g.clip();
+ g.fillStyle=C.dark;g.fillRect(b.x-r,b.y-r,r*2,r*2);
+ g.fillStyle=C.mid;g.beginPath();g.arc(b.x+L.x*r*.16,b.y+L.y*r*.16,r*.96,0,TAU);g.fill();
+ g.fillStyle=C.base;g.beginPath();g.arc(b.x+L.x*r*.3,b.y+L.y*r*.3,r*.76,0,TAU);g.fill();
+ if(BL.stripe){const ph=b.roll||0,front=Math.cos(ph);   // the band is on the near side of the ball half the time
+  if(front>0){const a=b.rollA||0,off=Math.sin(ph)*r,w=r*.3*Math.max(.35,front);g.save();g.translate(b.x+Math.cos(a)*off,b.y+Math.sin(a)*off);g.rotate(a);
+   g.globalAlpha=BL.stripeOpacity;g.fillStyle=C.band;g.fillRect(-w,-r*1.2,w*2,r*2.4);g.restore()}}
+ if(BL.highlight){const hx=b.x+L.x*r*.45,hy=b.y+L.y*r*.45;g.fillStyle=C.lit;g.beginPath();g.arc(hx,hy,r*.2,0,TAU);g.fill();
+  g.fillStyle='#ffffff';g.beginPath();g.arc(hx+L.x*r*.04,hy+L.y*r*.04,r*.08,0,TAU);g.fill()}
+ const T=ls.top;if(T&&T.w>.05){g.globalCompositeOperation='lighter';g.fillStyle=rgba(T.col,Math.min(.32,T.w*.16));g.beginPath();g.arc(b.x+T.x*r*.55,b.y+T.y*r*.55,r*.85,0,TAU);g.fill();g.globalCompositeOperation='source-over'}   // coloured light on the side facing a flash or glow
+ g.restore();
+}
+/* A ball is drawn in two passes. The body (shading, highlight, flash, outline) can go to the pixel layer (theme.ballLook.pixelArt), so it comes out
+   as chunky pixels; the top (status rings, wind-up marks, HP number) and the weapons always go straight to the arena, sharp. */
+function drawBody(b,dt,g,sh){
+ const A=TH.arena;
+ if(sh){g.save();g.translate(b.x,b.y);g.rotate(sh.a);g.scale(sh.sx,sh.sy);g.rotate(-sh.a);g.translate(-b.x,-b.y)}
+ if(BL.shading)shadeBall(b,dt,g);else{g.beginPath();g.arc(b.x,b.y,b.r,0,TAU);g.fillStyle=b.col;g.fill()}
+ if(b.flash>0){g.beginPath();g.arc(b.x,b.y,b.r,0,TAU);g.fillStyle=BL.shading?rgba('#ffffff',.8):'#fff';g.fill()}
+ const ow=1.8;g.beginPath();g.arc(b.x,b.y,b.r-(PXL?ow/2:0),0,TAU);g.lineWidth=PXL?Math.max(ow,PXL):ow;g.strokeStyle=b.player?A.playerOutline:b.boss?A.bossOutline:A.outline;g.stroke();
+ if(sh)g.restore();
+}
+function drawTop(b,S){
+ const im=IMG['ball.'+b.kind],A=TH.arena,sh=b._sh;
  if(im){
+  if(sh){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(sh.a);ctx.scale(sh.sx,sh.sy);ctx.rotate(-sh.a);ctx.translate(-b.x,-b.y)}
   ctx.drawImage(im,b.x-b.r,b.y-b.r,b.r*2,b.r*2);
   if(b.flash>0){ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fillStyle='#fff';ctx.fill();ctx.globalAlpha=1}
   if(OPT.ballOutlineOnSprites){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.lineWidth=b.player||b.boss?2.6:1.8;ctx.strokeStyle=b.player?A.playerOutline:b.boss?A.bossOutline:A.outline;ctx.stroke()}
- }else{
-  ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fillStyle=b.flash>0?'#fff':b.col;ctx.fill();
-  ctx.lineWidth=b.player||b.boss?2.6:1.8;ctx.strokeStyle=b.player?A.playerOutline:b.boss?A.bossOutline:A.outline;ctx.stroke();
+  if(sh)ctx.restore();
  }
- if(sh)ctx.restore();
  if(b.poison>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.poisonRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.2,S.t*2,S.t*2+Math.min(TAU,.6+b.poison*.12));ctx.stroke()}
  if(b.burn>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.burnRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5.8,-S.t*3,-S.t*3+Math.min(TAU,.6+b.burn*.25));ctx.stroke()}
  if(b.chill>0){const CM=(RULES.status&&RULES.status.chillMax)||10;ctx.lineWidth=2;ctx.strokeStyle=TH.effects.chill||'#a8e6ff';ctx.beginPath();ctx.arc(b.x,b.y,b.r+8.4,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,b.chill/CM));ctx.stroke()}   // Chill: fills toward Freeze
@@ -819,19 +980,29 @@ function draw(dt){
  else if(A.dotsOpacity>0){ctx.fillStyle=rgba(A.dots,A.dotsOpacity);for(let x=30;x<AW;x+=30)for(let y=30;y<AH;y+=30)ctx.fillRect(x-1,y-1,2,2)}
  for(const m of S.marks){const c=m.src.col;ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,TAU);ctx.fillStyle=rgba(c,.1+.2*(1-m.t/(m.t0||1)));ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=c;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([])}
  for(let i=cracks.length-1;i>=0;i--){const c=cracks[i];c.l-=dt;if(c.l<=0){cracks.splice(i,1);continue}ctx.globalAlpha=Math.min(1,c.l/c.m*1.6);ctx.lineJoin='round';ctx.lineCap='round';
-  ctx.beginPath();ctx.moveTo(c.pts[0][0],c.pts[0][1]);for(let k=1;k<c.pts.length;k++)ctx.lineTo(c.pts[k][0],c.pts[k][1]);ctx.lineWidth=4.5;ctx.strokeStyle=INK;ctx.stroke();ctx.lineWidth=1.8;ctx.strokeStyle=c.c;ctx.stroke();ctx.globalAlpha=1;ctx.lineCap='butt'}
+  if(PXL){const k=new Set();for(let j=1;j<c.pts.length;j++)pxLine(k,c.pts[j-1][0],c.pts[j-1][1],c.pts[j][0],c.pts[j][1]);const o=new Set();for(const q of k){const[a,b]=q.split(',').map(Number);for(const[u,v]of[[1,0],[-1,0],[0,1],[0,-1]])o.add((a+u)+','+(b+v))}pxFill(o,1,INK);pxFill(k,1,c.c)}
+  else{ctx.beginPath();ctx.moveTo(c.pts[0][0],c.pts[0][1]);for(let k=1;k<c.pts.length;k++)ctx.lineTo(c.pts[k][0],c.pts[k][1]);ctx.lineWidth=4.5;ctx.strokeStyle=INK;ctx.stroke();ctx.lineWidth=1.8;ctx.strokeStyle=c.c;ctx.stroke()}ctx.globalAlpha=1;ctx.lineCap='butt'}
  const pl=S.player;
- if(pl.alive&&pl.spd>330){trail.push({x:pl.x,y:pl.y});if(trail.length>12)trail.shift();trail.forEach((q,i)=>{ctx.beginPath();ctx.arc(q.x,q.y,pl.r*(i/12),0,TAU);ctx.fillStyle=rgba(pl.col,i/12*.25);ctx.fill()})}else if(trail.length)trail.shift();
+ if(pl.alive&&pl.spd>330){trail.push({x:pl.x,y:pl.y});if(trail.length>12)trail.shift();trail.forEach((q,i)=>{if(PXL){const k=new Set();pxDisc(k,q.x,q.y,pl.r*(i/12));pxFill(k,1,rgba(pl.col,i/12*.25))}else{ctx.beginPath();ctx.arc(q.x,q.y,pl.r*(i/12),0,TAU);ctx.fillStyle=rgba(pl.col,i/12*.25);ctx.fill()}})}else if(trail.length)trail.shift();
  for(const b of S.balls)if(b.alive&&b.healT&&b.healT.alive){ctx.lineWidth=2;ctx.strokeStyle=rgba(DT.heal,.6);ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.healT.x,b.healT.y);ctx.stroke()}
- drawArenaRules(S);
- for(const b of S.balls){if(!b.alive)continue;drawBall(b,S,dt);for(const w of b.ws)drawWeapon(b,w)}
+ drawArenaRules(S);stepLight(dt);frameLights(S,dt);
+ for(const b of S.balls)if(b.alive)b._sh=ballShape(b,dt);
+ if(PXL)pixelPass(S,dt);   // shadows and ball bodies as hard-edged pixel art
+ else{drawShadows(S,ctx);for(const b of S.balls)if(b.alive&&!IMG['ball.'+b.kind])drawBody(b,dt,ctx,b._sh)}
+ for(const b of S.balls){if(!b.alive)continue;drawTop(b,S);for(const w of b.ws)drawWeapon(b,w)}
  for(const p of S.projs){const im=IMG[p.team===0?'proj.player':'proj.enemy'];ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.ang||0);
   if(im){const L=14,h=L*im.height/im.width;ctx.drawImage(im,-L/2,-h/2,L,h)}
   else{ctx.fillStyle=p.team===0?TH.projectiles.player:TH.projectiles.enemy;ctx.strokeStyle=INK;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(-5,-3);ctx.lineTo(-5,3);ctx.closePath();ctx.fill();ctx.stroke()}
   ctx.restore()}
- for(let i=rings.length-1;i>=0;i--){const r=rings[i];r.l-=dt;if(r.l<=0){rings.splice(i,1);continue}const q=1-r.l/r.m;ctx.globalAlpha=1-q;ctx.lineWidth=3;ctx.strokeStyle=r.c;ctx.beginPath();ctx.arc(r.x,r.y,r.r*q,0,TAU);ctx.stroke();ctx.globalAlpha=1}
- for(let i=zaps.length-1;i>=0;i--){const z=zaps[i];z.l-=dt;if(z.l<=0){zaps.splice(i,1);continue}ctx.lineWidth=2;ctx.strokeStyle=TH.effects.lightning;ctx.beginPath();ctx.moveTo(z.x1,z.y1);for(let s=1;s<5;s++){const q=s/5;ctx.lineTo(z.x1+(z.x2-z.x1)*q+(Math.random()-.5)*14,z.y1+(z.y2-z.y1)*q+(Math.random()-.5)*14)}ctx.lineTo(z.x2,z.y2);ctx.stroke()}
- for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l-=dt;if(p.l<=0){parts.splice(i,1);continue}p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.94;p.vy*=.94;ctx.globalAlpha=p.l/p.m;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();ctx.globalAlpha=1}
+ drawLightPass();
+ for(let i=rings.length-1;i>=0;i--){const r=rings[i];r.l-=dt;if(r.l<=0){rings.splice(i,1);continue}const q=1-r.l/r.m;ctx.globalAlpha=1-q;
+  if(PXL){const k=new Set();pxRing(k,r.x,r.y,r.r*q);pxRing(k,r.x,r.y,r.r*q-PXL);pxFill(k,1,r.c)}else{ctx.lineWidth=3;ctx.strokeStyle=r.c;ctx.beginPath();ctx.arc(r.x,r.y,r.r*q,0,TAU);ctx.stroke()}ctx.globalAlpha=1}
+ for(let i=zaps.length-1;i>=0;i--){const z=zaps[i];z.l-=dt;if(z.l<=0){zaps.splice(i,1);continue}
+  const pts=[[z.x1,z.y1]];for(let s=1;s<5;s++){const q=s/5;pts.push([z.x1+(z.x2-z.x1)*q+(Math.random()-.5)*14,z.y1+(z.y2-z.y1)*q+(Math.random()-.5)*14])}pts.push([z.x2,z.y2]);
+  if(PXL){const k=new Set();for(let s=1;s<pts.length;s++)pxLine(k,pts[s-1][0],pts[s-1][1],pts[s][0],pts[s][1]);pxFill(k,1,TH.effects.lightning)}
+  else{ctx.lineWidth=2;ctx.strokeStyle=TH.effects.lightning;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let s=1;s<pts.length;s++)ctx.lineTo(pts[s][0],pts[s][1]);ctx.stroke()}}
+ for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l-=dt;if(p.l<=0){parts.splice(i,1);continue}p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.94;p.vy*=.94;ctx.globalAlpha=p.l/p.m;
+  if(PXL){const n=p.r>2.6?2:1;ctx.fillStyle=p.c;ctx.fillRect(pxSnap(p.x),pxSnap(p.y),n*PXL,n*PXL)}else{ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill()}ctx.globalAlpha=1}   // pixel squares, 1 or 2 pixels
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
  for(let i=floats.length-1;i>=0;i--){const f=floats[i];f.l-=dt;if(f.l<=0){floats.splice(i,1);continue}if(!f.still)f.y-=26*dt;const q=f.l/f.m;ctx.globalAlpha=Math.min(1,q*2.2);ctx.font=f.body?f.z+'px '+FONT_B:f.z*DFS+'px '+FONT_D;ctx.lineWidth=2.6;ctx.strokeStyle=INK;ctx.strokeText(f.s,clampX(f.x),f.y);ctx.fillStyle=f.c;ctx.fillText(f.s,clampX(f.x),f.y);ctx.globalAlpha=1}
  ctx.setTransform(k,0,0,k,0,0);
@@ -877,7 +1048,7 @@ function frame(ts){
   if(G.phase==='title'&&S.done){G.demoWait+=dt;if(G.demoWait>1.6){G.demoWait=0;startDemo()}}
  }
  Impact.tick(performance.now());holdTick(performance.now());
- draw(G.hold>0?0:dt);Impact.draw();liveDom();
+ {const t0=performance.now();draw(G.hold>0?0:dt);watchFrame(performance.now()-t0,dt)}Impact.draw();liveDom();
  requestAnimationFrame(frame);
 }
 function fit(){

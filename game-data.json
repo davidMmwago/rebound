@@ -13,7 +13,7 @@
   "rules": {
     "_note": "Distances are in arena units (the arena is 'arena.size' units wide). Speeds are units per second. Spin is radians per second (6.28 is one full turn a second).",
     "arena": { "size": 360 },
-    "run": { "tiersToWin": 8, "startGold": 8, "startSlots": 6, "maxSlots": 8, "shopAugments": 3, "shopTuneUps": 2 },
+    "run": { "tiersToWin": 8, "startGold": 8, "startSlots": 5, "maxSlots": 8, "shopAugments": 3, "shopTuneUps": 2 },
     "player": { "baseHp": 100, "radius": 21, "critChancePercent": 5, "critMult": 2, "hpPerBossBeaten": 10, "impact": 0 },
     "knockback": {
       "_note": "Max HP resists knockback, for enemies and your ball alike. Push x (1 + referenceHp/resistHp) / (1 + hp/resistHp): a ball at the reference HP is pushed normally, more HP is pushed less. Enemy HP is compared before tier scaling, so a Brute always resists more than a Grunt.",
@@ -684,7 +684,7 @@
     "ateText": "{by} ate {name}", "chainStreak": "Chain ×{n}", "miniYous": "Mini-Yous: {n}", "questProgress": "Quest: {n}/{need}", "questDone": "Quest complete", "armorLeft": "Armor {n}", "copying": "Copying {name}", "magnetPush": "Pushing", "magnetPull": "Pulling", "nullSocket": "Socket {n} off", "queenFrenzy": "Frenzy", "stormPairs": "Double strikes", "resisting": "Resists {type}", "payElite": "Elite defeated",
     "damageTypes": { "hit": "Hits", "effect": "Effects", "poison": "Poison", "burn": "Burn" },
     "eliteNames": { "armored": "Armored", "swift": "Swift", "vampiric": "Vampiric", "volatile": "Volatile", "warded": "Warded" },
-    "eliteLine": "Elite: {mod} {name}", "bagTitle": "Items {n}/{max}", "bagHint": "Click to use in the next fight.", "bagFull": "Bag full", "padlocked": "Padlocked", "itemSellTip": "Right-click: sell for ${gold}", "phase2Label": "At 50%:", "weakTo": "Weak to", "resistsLabel": "Resists", "nextBosses": "Coming up", "tierShort": "T{tier}", "miniWord": "Minis", "active": "On",
+    "eliteLine": "Elite: {mod} {name}", "bagTitle": "Items {n}/{max}", "bagHint": "Click to use in the next fight.", "bagFull": "Bag full", "padlocked": "Padlocked", "lightFull": "Lighting: Full", "lightSimple": "Lighting: Simple", "lightAutoSimple": "Frames were slow, so lighting switched to Simple. Change it with the Lighting button.", "itemSellTip": "Right-click: sell for ${gold}", "phase2Label": "At 50%:", "weakTo": "Weak to", "resistsLabel": "Resists", "nextBosses": "Coming up", "tierShort": "T{tier}", "miniWord": "Minis", "active": "On",
     "breakdownTitle": "Damage breakdown", "breakdownDealt": "Dealt by", "breakdownAdded": "Added by", "breakdownTriggered": "{n}×",
     "breakdownAddedTip": "Extra damage each one added on top of the hits it boosted. Boosts overlap, so these can add up to more than the total.",
     "breakdownOther": "No damage counted",
@@ -726,6 +726,25 @@
     },
     "arena": { "floor": "#1f172d", "dots": "#f6f0e4", "dotsOpacity": 0.06, "outline": "#0e0a14", "bossOutline": "#ffd23f", "playerOutline": "#ffffff" },
     "balls": { "player": "#ffd23f", "mini": "#ffe9a3" },
+    "_lightingNote": "Lighting. mode: 'full' (lights from the fight) or 'simple' (only the mouse light); players can switch it with the Lighting button. ambient: how dark the arena always is (0 = not at all). maxDim: the darkest lightning can make it. autoSimpleMs: if a frame takes longer than this for 3 seconds in full mode, the game switches to simple once. flashes: short lights from events (lightning = strikes from the sky, spark = other zaps, blast = big rings and explosions, glint = small rings, quake, impact = impact frames): color, intensity, radius (how far it reaches), height (lower = longer shadows), life in seconds, dim (how much it darkens everything else). glows: lights that follow things while they last (burning balls, frozen balls, warning marks). bossGlow: a boss that gives off light.",
+    "lighting": { "mode": "full", "ambient": 0, "maxDim": 0.6, "autoSimpleMs": 14,
+      "flashes": {
+        "lightning": { "color": "#d6ecff", "intensity": 2.6, "radius": 170, "height": 30, "life": 0.4, "dim": 0.6 },
+        "spark": { "color": "#bfefff", "intensity": 1.0, "radius": 120, "height": 30, "life": 0.18, "dim": 0.12 },
+        "blast": { "color": "#ffc070", "intensity": 1.4, "radius": 150, "height": 45, "life": 0.3, "dim": 0.12 },
+        "glint": { "color": "#ffffff", "intensity": 0.5, "radius": 60, "height": 30, "life": 0.2, "dim": 0 },
+        "quake": { "color": "#ead9b5", "intensity": 1.2, "radius": 260, "height": 60, "life": 0.35, "dim": 0.2 },
+        "impact": { "color": "#ffffff", "intensity": 1.4, "radius": 320, "height": 80, "life": 0.25, "dim": 0.3 } },
+      "glows": {
+        "burn": { "color": "#ff9f1c", "intensity": 0.35, "perStack": 0.03, "max": 1.1, "radius": 55, "height": 25 },
+        "frozen": { "color": "#bfefff", "intensity": 0.3, "radius": 45, "height": 30 },
+        "mark": { "color": "#ffe66d", "intensity": 0.9, "radius": 40, "height": 40 } },
+      "bossGlow": {
+        "furnace": { "color": "#ff8a3d", "intensity": 0.7, "radius": 130, "height": 40 },
+        "glacier": { "color": "#a8e6ff", "intensity": 0.6, "radius": 110, "height": 40 },
+        "storm": { "color": "#fff4a0", "intensity": 0.5, "radius": 110, "height": 40 } } },
+    "_ballLookNote": "How balls are drawn. shading: three tones stepped toward the light plus a highlight. shadow: a shadow on the floor; shadowLength: how far it reaches past the ball (share of the ball's radius). stripe: a light band that rolls as the ball moves. mouseLight: the light follows the mouse (otherwise it stays top left). lightEase: how quickly the light catches up with the mouse (lower is smoother). lightHeight: how high above the table the light hangs (higher is softer when the mouse is over a ball). weaponShadow and weaponShadowOffset: weapons cast a shadow too. weaponLight: how much brighter a weapon gets when it points toward the light. pixelArt and pixel: draw shading, highlights, outlines, shadows and light pools as chunky pixels, one pixel per 'pixel' arena units (false = smooth). Opacities are 0 to 1. A ball with its own sprite only gets the shadow.",
+    "ballLook": { "shading": true, "shadow": true, "stripe": false, "mouseLight": true, "highlight": true, "shadowOpacity": 0.42, "stripeOpacity": 0.55, "lightEase": 3, "lightHeight": 120, "shadowLength": 0.5, "weaponShadow": true, "weaponShadowOffset": 7, "weaponLight": 0.25, "pixelArt": true, "pixel": 1.5 },
     "weapons": { "blade": "#e8edf2", "guard": "#ffb72e", "shaft": "#b08968", "hammerHead": "#9aa5b1", "bow": "#d4a373", "shield": "#cbd5e1" },
     "projectiles": { "player": "#ffd23f", "enemy": "#ff5d73" },
     "damageText": { "hit": "#ffffff", "mini": "#ffe9a3", "area": "#9be7ff", "crit": "#ffd23f", "poison": "#7ee081", "burn": "#ff9f1c", "shock": "#7fdcff", "hurt": "#ff5d73", "heal": "#7ee081" },
