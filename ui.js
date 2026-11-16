@@ -15,8 +15,9 @@ const G={phase:'title',run:null,S:null,speed:1,paused:false,muted:false,best:0,p
  holdR:0,         // time R was pressed, or 0
  sellArm:null,sellTimer:0,sellAt:0,   // the owned augment showing "Sell for $X?", its timeout, and when it was asked
  restartArmed:false,restartTimer:0,
- peek:null};       // stage (0, 1, 2) of a later fight in this tier being previewed in the shop, or null for the current one
-const cv=$('#cv'),ctx=cv.getContext('2d'),side=$('#side'),overlay=$('#overlay'),chips=$('#chips');
+ peek:null,       // stage (0, 1, 2) previewed in the shop
+ view:'shop'};    // shop phase: 'shop' shows the shop in the arena box, 'arena' the warm-up       // stage (0, 1, 2) of a later fight in this tier being previewed in the shop, or null for the current one
+const cv=$('#cv'),ctx=cv.getContext('2d'),side=$('#side'),left=$('#left'),shopview=$('#shopview'),viewtabs=$('#viewtabs'),overlay=$('#overlay'),chips=$('#chips');
 const sysReduce=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);   // what the device asks for
 let reduce=sysReduce;   // what the game does: false once the owner picks "play effects anyway" in the Admin panel
 function setMotion(){reduce=sysReduce&&!G.forceMotion;document.documentElement.classList.toggle('force-motion',!!G.forceMotion)}
@@ -43,9 +44,8 @@ function applyTheme(){
  if(AS.images.logo)logo.innerHTML='<img class="logo-img" src="'+AS.images.logo+'" alt="'+name+'">';
  else logo.innerHTML='<i></i>'+TX.logoFirst+(TX.logoSecond?' <span>'+TX.logoSecond+'</span>':'');
  document.title=name;
- $('#lblP').textContent=TX.readoutPower;$('#lblM').textContent=TX.readoutMult;$('#lblD').textContent=TX.readoutLast;
 }
-function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=!!p.statsOpen;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=p.statsOpen!==false;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
 function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false,light:G.lightChosen?lightMode:undefined}))}catch(e){}}
 
 /* Font files (assets.fonts.display and .body), registered under the family names in theme.fonts. Optional font descriptors per role come from
@@ -136,12 +136,22 @@ const previewSeed=run=>({rs:run.rs^0x5bd1e995});
 const KW=TH.keywordColors||{},KDEF=DATA.keywords||{};
 const kwWords=Object.keys(KW).filter(k=>k!=='money'&&k[0]!=='_').map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
 const kwRe=kwWords.length?new RegExp('((?:[+×-]\\s?)?\\d[\\d.]*%?\\s)?\\b('+kwWords.join('|')+')(s?)\\b|[+−-]?\\$\\d+(?:\\.\\d+)?','g'):null;
-function rich(s){
+function kwRich(s){
  if(!kwRe||TX.colorKeywords===false)return s;
  return String(s).replace(kwRe,(m,n,word)=>{
   if(!word)return KW.money?'<b class="kw" style="color:'+KW.money+'">'+m+'</b>':m;
-  const def=KDEF[word]?tpl(KDEF[word]).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'):'';
+  const W=G.run&&WEAPONS[G.run.weapon],raw=word==='Ramp'&&W?tpl(TX.rampTip||'Your {weapon}: {ramp}.',{weapon:W.name,ramp:W.ramp}):KDEF[word]?tpl(KDEF[word]):'';   // Ramp: what your weapon's ramp does
+  const def=raw.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   return'<b class="kw" style="color:'+KW[word]+'"'+(def?' data-tip="'+def+'"':'')+'>'+m+'</b>'})
+}
+/* Trigger words (On hit:, On bounce:, Fight start:, Every 3 hits:...) and the word "tag" get a dotted underline and a hint from DATA.eventHints. */
+const EVH=DATA.eventHints||{},evKeys=Object.keys(EVH).filter(k=>k[0]!=='_'&&k!=='Every'&&k!=='tag'),reEsc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const evRe=new RegExp([evKeys.length?'\\b(?:'+evKeys.map(reEsc).join('|')+')(?=:)':'',EVH.Every?'\\bEvery [^:.<]{1,24}(?=:)':'',EVH.tag?'\\btags?\\b':''].filter(Boolean).join('|')||'(?!)','g');
+const evTip=m=>/^Every /.test(m)?EVH.Every:/^tags?$/.test(m)?EVH.tag:EVH[m]||'';
+function rich(s){
+ s=String(s);let out='',last=0,m;evRe.lastIndex=0;
+ while((m=evRe.exec(s))){out+=kwRich(s.slice(last,m.index))+'<span class="hint" data-tip="'+esc(evTip(m[0]))+'">'+m[0]+'</span>';last=m.index+m[0].length}
+ return out+kwRich(s.slice(last));
 }
 
 /* ---------- 3. flow between screens ---------- */
@@ -161,7 +171,7 @@ function previewFight(){
 function begin(weapon){G.run=newRun(weapon,(Math.random()*2147483647)|0);audioOn();toPrep()}
 function toPrep(){
  const run=G.run;overlay.hidden=true;
- G.phase=run.pending?'trophy':'prep';G.peek=null;previewFight();render();
+ G.phase=run.pending?'trophy':'prep';G.peek=null;G.view='shop';previewFight();render();
 }
 function startFight(){const run=G.run;G.peek=null;G.S=newFight(run,{juice:true});G.phase='fight';G.paused=false;lastN=0;clearFx();audioOn();render()}
 function endFight(){
@@ -182,6 +192,7 @@ document.addEventListener('click',e=>{
  switch(act){
   case'weapon':begin(b.dataset.w);return;
   case'fight':if(G.phase==='prep')startFight();return;
+  case'view':G.view=b.dataset.v==='arena'?'arena':'shop';render();return;
   case'peek':if(G.phase!=='prep'||!run)return;{const k=+b.dataset.i;if(k<run.stage||k>2)return;G.peek=k===run.stage?null:k;previewFight();render();
    const el=$(G.peek==null?'.next [data-act="fight"]':'.next .step.sel');if(el)el.focus({preventScroll:true})}return;
   case'buy':ok=buyOffer(run,i);break;
@@ -260,13 +271,27 @@ function augList(run,mode){
  if(tr.length)h+=`<div class="trophies">${tr.map(id=>`<span data-tip="${esc(TROPHY[id].desc)}">${icon('trophies',id)}${TROPHY[id].name}</span>`).join('')}</div>`;
  return h+'</section>';
 }
+/* Power x Mult on one row and Last hit under it, below the ball stats on the left (filled by liveDom during a fight). */
+function readoutHtml(){const S=G.S,L=G.phase==='fight'&&S&&!S.preview&&S.last;
+ return `<div class="readout${G.phase==='fight'?'':' idle'}" id="readout" aria-live="off"><div class="ro pw"><small>${TX.readoutPower}</small><b id="roP">${L?num(L.p):'–'}</b></div><i>×</i><div class="ro ml"><small>${TX.readoutMult}</small><b id="roM">${L?'×'+num(L.m):'–'}</b></div><div class="ro dm"><small>${TX.readoutLast}</small><b id="roD">${L?fmt(L.d)+(L.c?'!':''):'–'}</b></div></div>`}
+/* A stat's cap, shown after its value ("/760", or "no cap" after a cap Legendary). */
+function capTxt(run,k){const u=run.uncap&&run.uncap[k],c=capOf(run,k);return `<i class="cap">${u?(TX.noCap||'no cap'):'/'+c+(k==='armor'?'%':'')}</i>`}   // no hint (owner's call)
+const NX=()=>TX.statNamesExtra||{};
+/* Tag counts (shown while you own Specialist or Tag Team): how many of your augments carry each tag; the most common is highlighted. */
+function tagTracker(run){if(!run.augs.some(a=>a.id==='specialist'||a.id==='tagteam'))return'';const n={};for(const a of run.augs){const d=AUG[a.id];if(d)for(const g of d.tags)n[g]=(n[g]||0)+1}
+ const ks=Object.keys(n).sort((a,b)=>n[b]-n[a]);if(!ks.length)return'';const top=n[ks[0]];
+ return `<p class="tracker"><b class="hint" data-tip="${esc(TX.tagTip||'')}">${TX.tagsTitle||'Tags'}</b>${ks.map(k=>`<span class="${n[k]===top?'top':''}">${k} <em>${n[k]}</em></span>`).join('')}</p>`}
+/* Event counts this fight (shown while you own an augment that counts them: Singularity, Eight-Ball Rack, Kinetic Battery). */
+const TRACK={singularity:['hits','bounces','crits','collisions','kills'],rack:['collisions'],battery:['bounces']};
+function trackKeys(run){const s=new Set();for(const a of run.augs)for(const k of TRACK[a.id]||[])s.add(k);return['hits','bounces','crits','collisions','kills'].filter(k=>s.has(k))}
 function statBlock(run){
- const P=calcPlayer(run,null),W=P.W,N=TX.statNames;
- const row=(k,v)=>`<div><dt>${k}</dt><dd>${v}</dd></div>`;
+ const P=calcPlayer(run,null),W=P.W,N=TX.statNames,X=NX();
+ const row=(k,v,cap)=>`<div><dt>${k}</dt><dd>${v}${cap?capTxt(run,cap):''}</dd></div>`;
+ const volley=W.type==='bow'||P.projExtra>0||run.augs.some(a=>a.id==='sidearm');
  return `<section class="card" id="yourball"><h3>${TX.yourBall} <span>${W.name}${P.blades>1&&!W.fist?' ×'+P.blades:''}</span></h3>
-  <p class="ramp"><b>${TX.rampLabel}</b> ${rich(W.ramp)}${P.rampX>1?' (×'+num(P.rampX)+')':''}. ${TX.rampResets}</p>
-  <dl class="stats">${row(N.hp,P.hp)}${row(N.power,num(P.pow))}${row(N.mult,'×'+num(P.mult))}${row(N.crit,Math.round(P.crit*100)+'%')}
-  ${row(N.speed,Math.round(P.spd))}${row(N.spin,num(P.spin))}${row(N.reach,Math.round(P.reach))}${row(N.armor,num(P.armor))}${row(N.regen,num(P.regen)+'/s')}${row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl></section>`;
+  <p class="ramp"><b class="hint" data-tip="${esc(tpl(TX.rampTip||'',{weapon:W.name,ramp:W.ramp}))}">${TX.rampLabel}</b> ${rich(W.ramp)}${P.rampX>1?' (×'+num(P.rampX)+')':''}. ${TX.rampResets}</p>
+  <dl class="stats">${row(N.hp,P.hp)}${row(N.power,num(P.pow))}<div data-tip="${esc(TX.multTip||'')}"><dt>${N.mult}</dt><dd>×${num(shopMult(run))}</dd></div>${row(N.crit,Math.round(P.crit*100)+'%')}
+  ${row(N.speed,Math.round(P.spd),'spd')}${W.fist?'':row(N.spin,num(P.spin),'spin')+row(N.reach,Math.round(P.reach))+row(X.blades||'Blades',P.blades,'blades')}${volley?row(X.volley||'Volley',1+P.projExtra,'volley'):''}${row(N.armor,num(P.armor),'armor')}${row(N.regen,num(P.regen)+'/s')}${W.fist?'':row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl>${tagTracker(run)}</section>`;
 }
 /* The next-fight card. Its tracker shows the tier's three fights (two circles and a diamond). In the shop, the current fight and the ones still ahead are
    buttons: pressing one previews that fight here and in the warm-up (G.peek), and the Fight button becomes "Jump to current". */
@@ -278,18 +303,19 @@ function nextCard(run,mode){
   if(!shop||i<run.stage)return `<span class="${cls}"><i></i><span>${lbl}</span></span>`;
   const tip=i===run.stage?TX.previewCurrentTip||'Current fight':TX.previewTip||'Preview this fight';
   return `<button class="${cls}" data-act="peek" data-i="${i}" aria-pressed="${i===st}" data-tip="${esc(tip)}"><i></i><span>${lbl}</span></button>`}).join('<b class="step-line" aria-hidden="true"></b>');
+ if(mode==='fight')return `<section class="card next compact${b?' is-boss':''}"><div class="head"><h2>${b?b.name:encSummary(enc)}</h2><div class="steps">${steps}</div></div>${b?`<p class="rule">${rich(b.rule)}</p>`:''}</section>`;   // fight: one thin row
  let h=`<section class="card next${b?' is-boss':''}${pk!=null?' peeking':''}"><div class="eyebrow"><span>${TX.chipTier} ${run.tier}${run.endless?' · '+TX.endless:''}</span>${pk!=null?`<span class="peek-tag">${TX.previewTag||'Preview'}</span>`:''}</div>
   <div class="steps">${steps}</div>`;
  if(b)h+=`<h2>${b.name}</h2><p class="rule">${rich(b.rule)}</p>${bossNotes(b)}${enc.list.length?`<p class="with">${TX.bossBrings} ${encSummary(enc)}.</p>`:''}`;
  else h+=`<h2>${encSummary(enc)}</h2>${encNotes(enc)}`;
  h+=nextBosses(run);
- if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc(d.desc+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
+ if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc((TX.consumableTag||'Consumable')+': '+d.desc+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
  if(shop)h+=pk!=null?`<button class="go back" data-act="peek" data-i="${run.stage}" data-primary>${TX.jumpToCurrent||'Jump to current'}</button>`:`<button class="go" data-act="fight" data-primary>${TX.fightButton}</button>`;
  return h+'</section>';
 }
 function shopCard(run){
  const sh=run.shop,full=run.augs.length>=run.slots,E=RULES.economy;
- let h=`<section class="card shop"><h3>${TX.shopTitle} <span>${TX.shopYouHave} <b class="gold">$${run.gold}</b></span></h3><div class="offers">`;
+ let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3><button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></div><div class="offers">`;   // reroll in the top right corner
  sh.offers.forEach((o,i)=>{const d=AUG[o.id];if(!d)return;const c=augCost(run,o.id);
   h+=augCard({id:o.id,kind:'offer',i,tag:'div',cls:o.sold?' sold':'',
    foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});
@@ -298,11 +324,13 @@ function shopCard(run){
   h+=`<div class="tune${tu.sold?' sold':''}">${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${rich(d.desc)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
  h+='</div>';
  if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=CONS.bagSize;h+=`<div class="tunes items">`;
-  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}">${icon('items',o.id)}<div><b>${d.name}</b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
+  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}">${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
  const int=Math.min(run.intCap,Math.floor(run.gold/E.interestPerGold));
- h+=`<div class="shop-f"><button data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} $${sh.reroll}</button><span>${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
+ h+=`<div class="shop-f"><span class="interest">${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
  return h;
 }
+/* Title screen: the rules and glossary on the left, New run and the weapons on the right. */
+function titleLeft(){return `<section class="card how"><h3>${TX.howTitle}</h3><p>${rich(TX.howBody)}</p><dl class="gloss">${Object.keys(KDEF).filter(k=>k[0]!=='_').map(k=>`<div><dt${KW[k]?' style="color:'+KW[k]+'"':''}>${k}</dt><dd>${tpl(KDEF[k])}</dd></div>`).join('')}</dl></section>`}
 function titlePanel(){
  let h=`<section class="card hero"><h1>${TX.heroHeadline}</h1>${TX.heroBody?`<p>${t('heroBody',{tiers:RULES.run.tiersToWin})}</p>`:''}
   ${G.best?`<p class="best">${t('bestRun',{tier:G.best})}</p>`:''}</section>`;
@@ -310,16 +338,19 @@ function titlePanel(){
  h+=`<section class="card"><h3>${TX.pickWeapon} <span>${TX.pickWeaponHint}</span></h3><div class="weapons">`;
  for(const k of Object.keys(WEAPONS)){const w=WEAPONS[k];
   h+=`<button class="weapon" data-act="weapon" data-w="${k}">${icon('weapons',k)}<b>${w.name}</b><span class="wstat">${TX.statNames.power} ${w.pow}${w.fist?'':' · '+TX.statNames.spin+' '+w.spin}${w.kb?' · '+(TX.statNames.knock||'Knockback')+' '+w.kb:''}${w.impact?' · '+(TX.statNames.impact||'Impact')+' '+w.impact:''}</span><span>${w.blurb}</span><span class="wramp">${TX.rampLabel}: ${w.ramp}</span></button>`}
- h+=`</div></section><section class="card how"><h3>${TX.howTitle}</h3><p>${rich(TX.howBody)}</p><dl class="gloss">${Object.keys(KDEF).filter(k=>k[0]!=='_').map(k=>`<div><dt${KW[k]?' style="color:'+KW[k]+'"':''}>${k}</dt><dd>${tpl(KDEF[k])}</dd></div>`).join('')}</dl></section>`;
+ h+=`</div></section>`;
  return h;
 }
-function fightPanel(run){
- const S=G.S,N=TX.statNames;
- return nextCard(run,'fight')+adminCard(run)+`<section class="card ballcard"><h3>${TX.yourBall} <span>${S.P.W.name}</span>
+/* In a fight: your ball (HP, ramp, live stats, trackers) on the left; the fight card and augments on the right. */
+function fightBall(run){
+ const S=G.S,N=TX.statNames,tk=trackKeys(run),caps={speed:'spd',spin:'spin'};
+ return `<section class="card ballcard"><h3>${TX.yourBall} <span>${S.P.W.name}</span>
    <button class="fold-btn" data-act="stats" aria-expanded="${G.statsOpen}" aria-controls="livestats">${TX.statsToggle||'Stats'}<i></i></button></h3>
   <div class="hpbar"><i id="hpfill"></i><b id="hptxt"></b></div><p class="ramp" id="rampline"></p>
-  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.map(l=>`<div id="ls-${l[0]}"><dt>${N[l[0]]}</dt><dd><b>–</b><small></small></dd></div>`).join('')}</dl></div></div></section>`+augList(run,'fight');
+  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.filter(l=>!(S.P.W.fist&&(l[0]==='spin'||l[0]==='reach'))).map(l=>`<div id="ls-${l[0]}"><dt>${N[l[0]]}</dt><dd><b>–</b>${caps[l[0]]?capTxt(run,caps[l[0]]):''}<small></small></dd></div>`).join('')}</dl></div></div>
+  ${tk.length?`<p class="tracker" id="evtrack"><b>${TX.eventsTitle||'This fight'}</b>${tk.map(k=>`<span data-ev="${k}">${(TX.eventNames||{})[k]||k} <em>0</em></span>`).join('')}</p>`:''}${tagTracker(run)}</section>`;
 }
+function fightPanel(run){return nextCard(run,'fight')+adminCard(run)+augList(run,'fight')}
 function renderCtl(){
  $('#speed').innerHTML=[1,2,4,8].map(v=>`<button data-act="speed" data-v="${v}" aria-pressed="${G.speed===v}">${v}×</button>`).join('');
  $('#pause').textContent=G.paused?TX.resume:TX.pause;$('#pause').setAttribute('aria-pressed',G.paused);
@@ -365,10 +396,16 @@ function breakdown(S,run){
  const rows=(keys,plus)=>keys.map(k=>{const v=B[k],w=Math.min(100,v/total*100);
   return`<li style="--w:${w.toFixed(1)}%"><span>${name(k)}<small>${trig(k)}</small></span><b>${plus?'+':''}${fmt(v)}${plus?'':`<small> ${Math.round(w)}%</small>`}</b></li>`}).join('');
  const keys=Object.keys(B).filter(k=>B[k]>=.5),dealt=keys.filter(k=>!k.startsWith('boost:')).sort((a,b)=>B[b]-B[a]),added=keys.filter(k=>k.startsWith('boost:')).sort((a,b)=>B[b]-B[a]);
- const seen=new Set(keys.map(idOf)),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
+ const LG=(S.P&&S.P.log)||{},X=NX(),SN=TX.statNames;
+ const statName={hp:SN.hp,pow:SN.power,mult:SN.mult,crit:SN.crit,critMult:X.critMult||'Crit multiplier',spd:SN.speed,spin:SN.spin,reach:SN.reach,armor:SN.armor,regen:SN.regen,kb:SN.knock||'Knockback',impact:SN.impact||'Impact',blades:X.blades||'Blades',size:X.size||'Size',projExtra:X.volley||'Volley',projBounce:X.projBounce||'Projectile bounces',bounceX:X.bounceX||'Bounce count',rampX:SN.ramp||TX.rampLabel||'Ramp',poisonX:X.poisonX||'Poison damage',burnX:X.burnX||'Burn damage',frozenX:X.frozenX||'Damage to Frozen'};
+ const sv=(k,v)=>k==='crit'?(v>0?'+':'')+Math.round(v*100)+'%':k==='regen'?(v>0?'+':'')+num(v)+'/s':(v>0?'+':'')+num(v);
+ const statLines=Object.keys(LG).map(id=>{const L=LG[id],parts=[];for(const k in L){const v=L[k];if(k.startsWith('inc.')){const s=k.slice(4);parts.push((v>0?'+':'')+Math.round(v*100)+'% '+(statName[s]||s))}else if(k.startsWith('more.')){const s=k.slice(5);parts.push('×'+num(v)+' '+(statName[s]||s))}else parts.push(sv(k,v)+' '+(statName[k]||k))}
+  const d=AUG[id]||TROPHY[id]||ITEM[id];return parts.length?`<li><span>${d?d.name:id}</span><b class="st">${parts.join(', ')}</b></li>`:''}).join('');   // what each source added to your stats this fight
+ const seen=new Set(keys.map(idOf).concat(Object.keys(LG))),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
  return`<details class="bd" id="bd"${G.bdOpen!==false?' open':''}><summary>${TX.breakdownTitle||'Damage breakdown'} <b>${fmt(total)}</b></summary>
   <h4>${TX.breakdownDealt||'Dealt by'}</h4><ul class="pay">${rows(dealt,false)}</ul>
   ${added.length?`<h4 data-tip="${esc(TX.breakdownAddedTip||'')}">${TX.breakdownAdded||'Added by'}</h4><ul class="pay">${rows(added,true)}</ul>`:''}
+  ${statLines?`<h4>${TX.statsAdded||'Stats added'}</h4><ul class="pay statlist">${statLines}</ul>`:''}
   ${rest.length?`<p class="bd-rest">${TX.breakdownOther||'No damage counted'}: ${rest.join(', ')}</p>`:''}</details>`;
 }
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='bd'){G.bdOpen=e.target.open;savePrefs()}},true);
@@ -401,16 +438,19 @@ function runStats(run,S){
 }
 /* Rebuilds the side panel, header chips and overlay for the current phase. Call after any state change. */
 function render(){
- const run=G.run,keep=side.scrollTop;
- document.body.dataset.phase=G.phase;
- if(G.phase==='title')side.innerHTML=titlePanel();
- else if(G.phase==='prep')side.innerHTML=nextCard(run,'prep')+adminCard(run)+shopCard(run)+augList(run,'prep')+statBlock(run);
- else if(G.phase==='trophy')side.innerHTML=nextCard(run,'x')+augList(run,'x')+statBlock(run);
- else side.innerHTML=fightPanel(run);
- side.scrollTop=keep;
+ const run=G.run,keep=side.scrollTop,keepL=left.scrollTop,keepV=shopview.scrollTop,ph=G.phase;
+ document.body.dataset.phase=ph;
+ let L='',R='';
+ if(ph==='title'){L=titleLeft();R=titlePanel()}
+ else if(ph==='prep'){L=statBlock(run)+readoutHtml();R=nextCard(run,'prep')+adminCard(run)+augList(run,'prep')}
+ else if(ph==='trophy'){L=statBlock(run)+readoutHtml();R=nextCard(run,'x')+augList(run,'x')}
+ else{L=fightBall(run)+readoutHtml();R=fightPanel(run)}
+ left.innerHTML=L;side.innerHTML=R;
+ /* Shop phase: the shop and the warm-up share the arena box, switched with the tabs above it (G.view); the shop comes first. */
+ const prep=ph==='prep';viewtabs.hidden=!prep;shopview.innerHTML=prep?shopCard(run):'';shopview.hidden=!prep||G.view==='arena';
+ if(prep)viewtabs.innerHTML=[['shop',TX.viewShop||'Shop'],['arena',TX.viewArena||'Warm-up']].map(([v,l])=>`<button data-act="view" data-v="${v}" aria-pressed="${(G.view==='arena'?'arena':'shop')===v}">${l}</button>`).join('');
+ side.scrollTop=keep;left.scrollTop=keepL;shopview.scrollTop=keepV;fit();
  renderChips();renderCtl();renderOverlay();syncMusic();fixTips();
- $('#readout').classList.toggle('idle',G.phase!=='fight');
- if(G.phase!=='fight'){$('#roP').textContent='–';$('#roM').textContent='–';$('#roD').textContent='–'}
 }
 
 /* ---------- augment cards, hint bubbles and card tilt ---------- */
@@ -443,12 +483,12 @@ function augCard(o){
   <div class="ac-plate">${o.lead||''}<div class="ac-body">
    <div class="aug-h"><b class="ac-name">${d.name}</b>${owned?`<span class="live" id="lv${o.i}"></span>`:''}</div>
    <p class="ac-text ac-clip"${x?` data-tip-extra="${x}"`:''}>${rich(d.desc)}</p>
-   <div class="tags ac-clip"><span class="tg">${rn} · ${d.tags.join(' · ')}</span>${o.notes||''}</div>
+   <div class="tags ac-clip"><span class="tg" data-tip="${esc(TX.tagTip||'')}">${rn} · ${d.tags.join(' · ')}</span>${o.notes||''}</div>
   </div>${o.foot||''}</div></${o.tag}>`;
 }
 /* Text that did not fit on a card (class ac-clip) gets its full wording as a hint, followed by data-tip-extra. Runs after the side panel is rebuilt or resized. */
 function fixTips(){
- for(const el of side.querySelectorAll('.ac-clip')){
+ for(const el of document.querySelectorAll('#side .ac-clip,#shopview .ac-clip,#left .ac-clip')){
   const cut=el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1,extra=el.getAttribute('data-tip-extra')||'';
   const tip=(cut?el.textContent.trim().replace(/\s+/g,' ')+(extra?' ':''):'')+extra;
   if(tip)el.setAttribute('data-tip',tip);else el.removeAttribute('data-tip')}
@@ -641,7 +681,7 @@ const r2=v=>Math.abs(v)<1e4?''+Math.round(v*100)/100:short(v);
 const LIVE=[
  ['hp',S=>S.player.maxhp,v=>''+Math.round(v),v=>''+Math.round(v)],
  ['power',S=>S.P.pow+S.ramp.pow,num,num],
- ['mult',S=>S.P.mult+S.ramp.mult,v=>'×'+r2(v),r2],
+ ['mult',S=>shownMult(S),v=>'×'+r2(v),r2],   // every always-on ×Mult and +Mult, in socket order (shownMult in core.js)
  ['crit',S=>(S.P.crit+S.ramp.crit)*100,v=>Math.round(v)+'%',v=>Math.round(v)+'%'],
  ['speed',S=>S.player.spd,v=>''+Math.round(v),v=>''+Math.round(v)],
  ['spin',S=>S.player.ws[0]?S.player.ws[0].spin:0,num,num],
@@ -739,10 +779,15 @@ function drawArenaRules(S){
  for(const z of S.ice){const q=Math.min(1,z.t/Math.min(1,z.t0));ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,TAU);ctx.fillStyle=rgba(TH.effects.freeze||'#d9f4ff',.22*q);ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=rgba(TH.effects.freeze||'#d9f4ff',.6*q);ctx.stroke()}
 }
 /* Rings over a ball that warn of an enemy's move or show its state: wind-up flash, fuse, a Stabber ready to dodge, an elite, The Bulwark's shield. */
+/* Mini Hut: a stepped pixel roof sitting on top of its ball (drawn by code until assets.images.balls.hut is set). */
+function drawHutRoof(b){const u=PXL||1.5,w=Math.round(b.r*1.25/u),top=b.y-b.r-u*Math.ceil(w/2)+u*2;
+ ctx.fillStyle=INK;for(let i=0;i<=Math.ceil(w/2);i++){const half=i+1;ctx.fillRect(b.x-half*u-u,top+i*u-u,(half*2+2)*u,u*2)}
+ ctx.fillStyle=dark(b.col)?'#e3a36b':'#8a5a35';for(let i=0;i<Math.ceil(w/2);i++){const half=i+1;ctx.fillRect(b.x-half*u,top+i*u,half*2*u,u)}}
 function drawBallMarks(b,S){
  if(b.tele>0){ctx.lineWidth=2.5;ctx.strokeStyle=rgba('#ffffff',.5+.5*Math.sin(S.t*40));ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,TAU);ctx.stroke()}
  if(b.fuse!=null){ctx.lineWidth=2.5;ctx.strokeStyle=rgba(TH.damageText.burn,.6+.4*Math.sin(S.t*30));ctx.beginPath();ctx.arc(b.x,b.y,b.r+4+(1-b.fuse)*6,0,TAU);ctx.stroke()}
  if(b.kind==='stabber'&&b.ready){ctx.lineWidth=1.2;ctx.strokeStyle=rgba(TH.page.chalk,.7);ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,TAU);ctx.stroke();ctx.setLineDash([])}
+ if(b.hut&&!IMG['ball.hut'])drawHutRoof(b);
  if(b.elite){ctx.lineWidth=1.2;ctx.strokeStyle=TH.page.gold;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.5,0,TAU);ctx.stroke()}
  if(b.shieldOn){const a=Math.atan2(b.vy,b.vx),w=(S.bossDef&&S.bossDef.v.shieldArc)||1.1;ctx.lineCap='round';ctx.lineWidth=8;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle=TH.weapons.shield;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineCap='butt'}
 }
@@ -823,7 +868,7 @@ function pixelPass(S,dt){
  const A_=TH.arena;
  for(const b of S.balls){if(!b.alive||IMG['ball.'+b.kind])continue;
   const C=shades(b.col),D=rgbOf(C.dark),M=rgbOf(C.mid),B=rgbOf(C.base),Lt=rgbOf(C.lit),ls=sampleLight(b),L=ls.dir,r=b.r,sh=b._sh;
-  const OC=rgbOf(b.player?A_.playerOutline:b.boss?A_.bossOutline:A_.outline),ow=P;   // one pixel for every ball
+  const OC=rgbOf(b.player||b.twin?A_.playerOutline:b.boss?A_.bossOutline:A_.outline),ow=P;   // one pixel for every ball
   const mx=b.x+L.x*r*.16,my=b.y+L.y*r*.16,bx=b.x+L.x*r*.3,by=b.y+L.y*r*.3,hx=b.x+L.x*r*.45,hy=b.y+L.y*r*.45,wx=hx+L.x*r*.04,wy=hy+L.y*r*.04,hr=Math.max(r*.2,P*.9),wr=Math.max(r*.08,P*.55);
   const T=ls.top,tA=T&&T.w>.05?Math.min(.32,T.w*.16):0,TC=tA?rgbOf(T.col):null,tx=T?b.x+T.x*r*.55:0,ty=T?b.y+T.y*r*.55:0,fl=b.flash>0;
   const ca=sh?Math.cos(sh.a):1,sa=sh?Math.sin(sh.a):0,sx=sh?sh.sx:1,sy=sh?sh.sy:1,ext=r*Math.max(sx,sy)+P;
@@ -943,7 +988,7 @@ function drawBody(b,dt,g,sh){
  if(sh){g.save();g.translate(b.x,b.y);g.rotate(sh.a);g.scale(sh.sx,sh.sy);g.rotate(-sh.a);g.translate(-b.x,-b.y)}
  if(BL.shading)shadeBall(b,dt,g);else{g.beginPath();g.arc(b.x,b.y,b.r,0,TAU);g.fillStyle=b.col;g.fill()}
  if(b.flash>0){g.beginPath();g.arc(b.x,b.y,b.r,0,TAU);g.fillStyle=BL.shading?rgba('#ffffff',.8):'#fff';g.fill()}
- const ow=1.8;g.beginPath();g.arc(b.x,b.y,b.r-(PXL?ow/2:0),0,TAU);g.lineWidth=PXL?Math.max(ow,PXL):ow;g.strokeStyle=b.player?A.playerOutline:b.boss?A.bossOutline:A.outline;g.stroke();
+ const ow=1.8;g.beginPath();g.arc(b.x,b.y,b.r-(PXL?ow/2:0),0,TAU);g.lineWidth=PXL?Math.max(ow,PXL):ow;g.strokeStyle=b.player||b.twin?A.playerOutline:b.boss?A.bossOutline:A.outline;g.stroke();
  if(sh)g.restore();
 }
 function drawTop(b,S){
@@ -952,7 +997,7 @@ function drawTop(b,S){
   if(sh){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(sh.a);ctx.scale(sh.sx,sh.sy);ctx.rotate(-sh.a);ctx.translate(-b.x,-b.y)}
   ctx.drawImage(im,b.x-b.r,b.y-b.r,b.r*2,b.r*2);
   if(b.flash>0){ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fillStyle='#fff';ctx.fill();ctx.globalAlpha=1}
-  if(OPT.ballOutlineOnSprites){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.lineWidth=b.player||b.boss?2.6:1.8;ctx.strokeStyle=b.player?A.playerOutline:b.boss?A.bossOutline:A.outline;ctx.stroke()}
+  if(OPT.ballOutlineOnSprites){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.lineWidth=b.player||b.twin||b.boss?2.6:1.8;ctx.strokeStyle=b.player||b.twin?A.playerOutline:b.boss?A.bossOutline:A.outline;ctx.stroke()}
   if(sh)ctx.restore();
  }
  if(b.poison>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.poisonRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.2,S.t*2,S.t*2+Math.min(TAU,.6+b.poison*.12));ctx.stroke()}
@@ -1018,14 +1063,16 @@ const clampX=x=>clamp(x,14,AW-14);
 /* Updates the few HTML bits that change during a fight: the Power × Mult readout, HP bar, ramp line, augment flashes. */
 function liveDom(){
  const S=G.S;if(!S||S.preview||!['fight','payout','over','victory'].includes(G.phase))return;
- if(G.phase==='fight'&&S.last&&S.last.n!==lastN){lastN=S.last.n;const L=S.last;$('#roP').textContent=num(L.p);$('#roM').textContent='×'+num(L.m);const d=$('#roD');d.textContent=fmt(L.d)+(L.c?'!':'');
-  if(!reduce){d.classList.remove('bump');void d.offsetWidth;d.classList.add('bump')}}
+ if(G.phase==='fight'&&S.last&&S.last.n!==lastN){lastN=S.last.n;const L=S.last;const rp=$('#roP'),rm=$('#roM'),d=$('#roD');if(rp)rp.textContent=num(L.p);if(rm)rm.textContent='×'+num(L.m);if(d){d.textContent=fmt(L.d)+(L.c?'!':'')}
+  if(d&&!reduce){d.classList.remove('bump');void d.offsetWidth;d.classList.add('bump')}}
  if(++liveTick%4)return;
  const run=G.run,p=S.player,hf=$('#hpfill');
  if(G.admin){const n=$('#adm-note');if(n){const s=impactNote();if(n.textContent!==s)n.textContent=s}}
  if(hf){liveStats(S);hf.style.width=clamp(p.hp/p.maxhp*100,0,100)+'%';$('#hptxt').textContent=fmt(Math.max(0,p.hp))+' / '+fmt(p.maxhp);
   const R=S.ramp,N=TX.statNames,bits=[];if(R.pow)bits.push('+'+num(R.pow)+' '+N.power);if(R.mult)bits.push('+'+num(R.mult)+' '+N.mult);if(R.spin>1)bits.push('+'+Math.round((R.spin-1)*100)+'% '+N.spin);if(R.reach)bits.push('+'+Math.round(R.reach)+' '+N.reach);if(R.arrows>=1)bits.push('+'+Math.floor(R.arrows)+' '+TX.arrows);if(R.spd>0)bits.push('+'+Math.round(R.spd*100)+'% '+N.speed);if(R.crit>0)bits.push('+'+Math.round(R.crit*100)+'% '+N.crit);
   $('#rampline').innerHTML='<b>'+TX.rampLabel+'</b> '+(bits.length?rich(bits.join(', ')):TX.rampNothing)+(S.chill<1?' · '+t('chilled',{percent:Math.round(S.chill*100)}):'')}
+ {const ev=$('#evtrack');if(ev){const C=S.count||{},v={hits:C.hits||0,bounces:C.bounces||0,crits:C.crits||0,collisions:(C.collisions||0)+(C.enemyCollisions||0),kills:C.kills||0},top=Math.max(...Object.values(v));
+  for(const sp of ev.querySelectorAll('[data-ev]')){const k=sp.dataset.ev,em=sp.querySelector('em');if(em.textContent!==''+v[k])em.textContent=v[k];sp.classList.toggle('top',v[k]===top&&top>0)}}}   // event counts for Singularity, Eight-Ball Rack, Kinetic Battery
  if(G.phase!=='fight')return;
  run.augs.forEach((a,i)=>{const el=document.getElementById('aug'+i);if(!el)return;if(S.off)el.classList.toggle('off',S.off.has(a));el.classList.toggle('on',S.pulses[i]!=null&&S.t-S.pulses[i]<.3);
   const sh=a.id==='mirror'&&a.sh&&AUG[a.sh.id]?a.sh:null,d=AUG[sh?sh.id:a.id],lv=document.getElementById('lv'+i);if(lv&&d&&d.live){const s=d.live(sh||a,S,d.v)||'';if(lv.textContent!==s)lv.textContent=s}});
@@ -1053,7 +1100,7 @@ function frame(ts){
 }
 function fit(){
  const stage=$('.stage'),arena=$('#arena'),wide=window.matchMedia('(min-width: 900px)').matches;
- const avail=wide?Math.max(240,stage.clientHeight-$('#readout').offsetHeight-14):9999;
+ const avail=wide?Math.max(240,stage.clientHeight-(viewtabs.hidden?0:viewtabs.offsetHeight+12)):9999;   // the Shop / Warm-up tabs sit above the arena
  arena.style.width=Math.min(stage.clientWidth,avail)+'px';
  const px=Math.round(arena.clientWidth*Math.min(2,window.devicePixelRatio||1));
  if(px>0&&cv.width!==px){cv.width=px;cv.height=px}

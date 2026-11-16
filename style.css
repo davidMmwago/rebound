@@ -22,7 +22,7 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance;l
 p{margin:0}
 b{font-weight:700}
 
-#app{display:flex;flex-direction:column;gap:12px;padding:12px 16px 16px;max-width:1240px;margin:0 auto}
+#app{display:flex;flex-direction:column;gap:12px;padding:12px 16px 16px;max-width:1720px;margin:0 auto}
 .bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
 .logo{font-family:var(--display);font-size:var(--dpx,32.68px);line-height:1;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
 .logo i{width:22px;height:22px;border-radius:50%;background:var(--gold);border:2.5px solid #fff;box-shadow:0 3px 0 var(--drop);display:inline-block}
@@ -114,9 +114,10 @@ main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-height:0}
 @media (min-width:900px){
   html,body{height:100%}
   #app{height:100%}
-  main{grid-template-columns:minmax(0,1fr) minmax(360px,430px);flex:1}
-  .stage{justify-content:center;height:100%;min-height:0}
-  #side{overflow-y:auto;padding:0 6px 8px 2px;scrollbar-width:thin;scrollbar-color:var(--panel2) transparent}
+  main{grid-template-columns:minmax(230px,min(320px,20vw)) minmax(0,1fr) minmax(340px,min(480px,30vw));flex:1}
+  .stage{justify-content:flex-start;height:100%;min-height:0}
+  #side,#left{overflow-y:auto;overscroll-behavior:contain;padding:0 6px 8px 2px;min-height:0}
+  .weapons{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media (max-width:420px){.tunes{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.logo{font-size:var(--dpx,32.68px)}}
 /* Reduced motion: honoured unless the owner chose "play effects anyway" on this device (Admin panel), which sets .force-motion on <html>. */
@@ -259,3 +260,75 @@ button.step:active:not(:disabled){transform:none;box-shadow:none}
 @property --w{syntax:'<percentage>';inherits:false;initial-value:0%}
 .bd .pay li{transition:--w .45s ease-out}
 .bd .pay li.tw-hide{--w:0%!important}
+
+/* ---------- layout (16 November 2026): rules and stats on the left, arena in the middle, fight card and augments on the right ---------- */
+main{grid-template-areas:"stage" "side" "left"}
+#left{grid-area:left;display:flex;flex-direction:column;gap:12px;min-width:0}
+.stage{grid-area:stage} #side{grid-area:side}
+@media (min-width:900px){main{grid-template-areas:"left stage side"}}
+/* scrollbars: thin and quiet in the side columns; none at all on the recap sheet and in the shop (they still scroll) */
+#side,#left{scrollbar-width:thin;scrollbar-color:var(--panel2) transparent}
+#side::-webkit-scrollbar,#left::-webkit-scrollbar{width:8px}
+#side::-webkit-scrollbar-thumb,#left::-webkit-scrollbar-thumb{background:var(--panel2);border-radius:8px}
+#side::-webkit-scrollbar-track,#left::-webkit-scrollbar-track{background:transparent}
+.sheet{scrollbar-width:none}
+.sheet::-webkit-scrollbar{display:none}
+.shopview{scrollbar-width:thin;scrollbar-color:var(--panel2) transparent}
+.shopview::-webkit-scrollbar{width:8px}.shopview::-webkit-scrollbar-thumb{background:var(--panel2);border-radius:8px}.shopview::-webkit-scrollbar-track{background:transparent}
+/* Power x Mult = Last hit, in the header */
+/* Power x Mult = Last hit, below the ball stats: Power x Mult on one row, Last hit on its own row */
+#left .readout{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;max-width:none;width:100%}
+#left .readout .ro{padding:3px 10px 5px}
+#left .readout .dm{grid-column:1/-1}
+#left .readout>i{font-size:var(--dpx,32.68px)}
+/* reroll: top right of the shop, bigger */
+.shop-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.shop .reroll{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);line-height:1;padding:6px 16px;border-radius:12px;white-space:nowrap}
+.shop .reroll b{color:var(--gold);font-weight:400}
+/* Shop / Warm-up switch above the arena */
+.viewtabs{display:flex;align-self:center}
+.viewtabs button{border-radius:0;margin-left:-2px;min-width:110px}
+.viewtabs button:first-child{border-radius:10px 0 0 10px;margin-left:0}
+.viewtabs button:last-child{border-radius:0 10px 10px 0}
+
+/* ---------- shop view: the shop drawn inside the arena box (same size as the warm-up), its own section so it can be restyled freely ---------- */
+.shopview{position:absolute;inset:0;z-index:2;overflow-y:auto;background:var(--felt);padding:12px}
+.shopview .shop{height:100%;box-shadow:none;border:0;background:transparent;padding:4px;gap:10px}
+.shopview .offers{gap:9px}
+#overlay{z-index:3}
+/* consumable items look different from tune-ups */
+.tunes.items .tune{background:#1e3833;border-color:#0c1a17}
+.tunes.items .tune b{color:#7ee0b0}
+.ctag{display:inline-block;font-style:normal;font-size:var(--bfs,13.333px);color:#0c1a17;background:#7ee0b0;border-radius:6px;padding:0 6px;margin-left:6px;cursor:help;vertical-align:1px}
+/* caps next to stats, and the tag and event trackers */
+.stats dd .cap{font-size:var(--bfs,13.333px);color:var(--dim);margin-left:3px;font-style:normal}
+.tracker{font-size:var(--bfs,13.333px);color:var(--dim);display:flex;flex-wrap:wrap;gap:4px 10px}
+.tracker b{color:var(--dim);font-weight:400;text-transform:uppercase}
+.tracker span em{font-style:normal;color:var(--chalk)}
+.tracker span.top em{color:var(--gold)}
+.hint{border-bottom:1px dotted currentColor;cursor:help}
+.tg{cursor:help}
+/* the fight card during a fight: one row for the tracker and the name, so the augments sit higher */
+.next.compact{gap:4px;padding:8px 12px}
+.next.compact .head{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.next.compact .steps{margin:0}
+.next.compact .step{min-width:44px;padding:2px}
+.next.compact .step span{display:none}
+.next.compact .step i{width:20px;height:20px;border-width:2px}
+.next.compact .step.boss i{width:17px;height:17px}
+.next.compact .step-line{margin-top:11px;min-width:6px}
+.next.compact h2{flex:1;min-width:0}
+.statlist li{background:none!important}
+.statlist .st{font-family:var(--body);color:var(--pow);text-align:right}
+#left .gloss{grid-template-columns:auto 1fr;gap:5px 10px}
+#left .gloss div{display:contents}
+.tune .hint,.with .hint{display:inline}
+.stats dd{white-space:nowrap}
+.tune span .kw,.tune span b{display:inline}
+/* money: big and gold in the shop header, interest line in the money colour, the gold chip in the header stands out */
+.shop h3 .money{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);color:var(--gold);line-height:1}
+.shop-f .interest{color:var(--gold)}
+.chips .gold{border-color:var(--gold);font-family:var(--display);font-size:var(--dpx,32.68px);line-height:1;padding:0 12px}
+.shop .shop-h h3{font-size:calc(var(--dpx,32.68px)*1.5);align-items:center}   /* the Shop title stays bigger than the Reroll button */
+/* the shop title and your money are bigger than the reroll button (1.5x the title size, still pixel-sharp) */
+.shop .shop-h h3,.shop h3 .money{font-size:calc(var(--dpx,32.68px)*1.5);line-height:1}

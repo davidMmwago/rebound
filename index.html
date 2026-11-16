@@ -26,16 +26,15 @@
     </div>
   </header>
   <main>
+    <aside id="left"></aside>
     <section class="stage">
+      <div class="viewtabs" id="viewtabs" hidden></div>
       <div class="arena" id="arena">
         <canvas id="cv" width="720" height="720" aria-label="The arena: your ball and the enemy balls bounce and fight here"></canvas>
         <div id="impactfx"></div>
+        <!-- The shop is shown here, over the warm-up, in the shop phase. Its size is the arena's; its look is the "shop view" section of style.css. -->
+        <div id="shopview" class="shopview" hidden></div>
         <div id="overlay" hidden></div>
-      </div>
-      <div class="readout idle" id="readout" aria-live="off">
-        <div class="ro pw"><small id="lblP">Power</small><b id="roP">–</b></div><i>×</i>
-        <div class="ro ml"><small id="lblM">Mult</small><b id="roM">–</b></div><i>=</i>
-        <div class="ro dm"><small id="lblD">Last hit</small><b id="roD">–</b></div>
       </div>
     </section>
     <aside id="side"></aside>

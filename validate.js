@@ -27,7 +27,7 @@ function validateGameData(D){
   economy:['payoutFight1','payoutFight2','payoutBoss','hpBonusHighAtPercent','hpBonusHighGold','hpBonusLowAtPercent','hpBonusLowGold','interestPerGold','interestCap','rerollBaseCost','rerollCostStep','sellPercent','tuneUpBaseCost','tuneUpCostStep'],
   scaling:['enemyHpPerTier','enemyDamagePerTier','bossHpPerTier','bossHpFactor','fight1BudgetBase','fight1BudgetPerTier','fight2BudgetBase','fight2BudgetPerTier','bossAddsBudgetPerTier','bossAddsStartTier','bossAddsMax','maxEnemiesPerFight'],
   combat:['overtimeStartsAt','overtimePercentPerSecond','timeLimit','armorMaxReductionPercent','homing','poisonDamagePerStackPerSecond','burnDamagePerStackPerSecond','burnStacksLostPerSecond','maxSpin','maxPlayerSpeed','wallBounceJitter','bodyHitCooldown','enemyBodyHitCooldown','parryCooldown'],
-  minis:['powerPercent','hpPercent','armorPercent','radius','speed','maxAlive'],
+  minis:['powerPercent','hpPercent','armorPercent','radius','speed'],
   projectiles:['playerSpeed','enemySpeed','spread','maxPerVolley','lifetime'],
   feel:['hitStop','critHitStop','shakePerHitTaken','maxShake']};
  for(const g in need){if(!isObj(R[g])){out.push('rules.'+g+' is missing');continue}for(const k of need[g])num(R[g],k,'rules.'+g)}
@@ -65,11 +65,11 @@ function validateGameData(D){
  for(const k of keys(D.augments)){const p='augments.'+k,o=D.augments[k];if(!isObj(o)){out.push(p+' must be an object');continue}
   str(o,'name',p);str(o,'text',p);
   if(!rarNames.includes(o.rarity))out.push(p+'.rarity is '+show(o.rarity)+' but must be one of: '+rarNames.join(', '));
-  if(!Array.isArray(o.tags))out.push(p+'.tags must be a list in [ ]');
+  if(!Array.isArray(o.tags))out.push(p+'.tags must be a list in [ ]');if('needs' in o&&o.needs!=='blade')out.push(p+'.needs can only be "blade"');
   if(!isObj(o.values))out.push(p+'.values must be an object in { } (use {} if it has no numbers)');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}
 
  // tune-ups
- for(const k of['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eleven tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen, knock, impact, mini');continue}if('weight' in o)num(o,'weight',p);
+ for(const k of['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eleven tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen, knock, impact, mini');continue}if('weight' in o)num(o,'weight',p);if('needs' in o&&o.needs!=='blade')out.push(p+'.needs can only be "blade"');
   str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text')}
 
  // consumables (optional)
@@ -77,7 +77,7 @@ function validateGameData(D){
   str(o,'name',p);str(o,'text',p);num(o,'cost',p);if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}}
  if('consumables' in R){if(!isObj(R.consumables))out.push('rules.consumables must be an object');else for(const k of keys(R.consumables))num(R.consumables,k,'rules.consumables')}
  // trophies
- for(const k of keys(D.trophies)){const p='trophies.'+k,o=D.trophies[k];if(!isObj(o)){out.push(p+' must be an object');continue}
+ for(const k of keys(D.trophies)){const p='trophies.'+k,o=D.trophies[k];if(!isObj(o)){out.push(p+' must be an object');continue}if('weight' in o)num(o,'weight',p);
   str(o,'name',p);str(o,'text',p);if(!isObj(o.values))out.push(p+'.values must be an object in { }');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}
 
  // enemies and bosses
