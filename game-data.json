@@ -347,7 +347,7 @@
     "fission": { "name": "Mitosis", "rarity": "Legendary", "tags": ["swarm", "wild"],
       "_note": "(id stays 'fission'; the names of this and the Common were swapped on 16 Nov.) Your twin has your weapon and stats, its own ramp, and its own copy of every augment (and its own Minis, which die with it). Both halves have hpPercent of your Max HP. While two or more halves live, each deals damagePercent (Minis' rams are not cut). countsAs: how many Minis each other half counts as (Hive Mind, Underdog). If your ball falls while a twin lives, you carry on in the twin. Mirror Ball or Resonator on it makes more twins.",
       "text": "Split in two. Each half: {hpPercent}% Max HP, {damagePercent}% damage, its own copy of your augments and Minis.",
-      "values": { "hpPercent": 50, "damagePercent": 50, "countsAs": 2 } },
+      "values": { "hpPercent": 65, "damagePercent": 50, "countsAs": 2 } },
 
     "sidearm": { "name": "Sidearm", "rarity": "Common", "tags": ["shot"],
       "text": "Every {interval}s: fires a pellet for {powerPercent}% Power.",
@@ -795,6 +795,8 @@
         "furnace": { "color": "#ff8a3d", "intensity": 0.7, "radius": 130, "height": 40 },
         "glacier": { "color": "#a8e6ff", "intensity": 0.6, "radius": 110, "height": 40 },
         "storm": { "color": "#fff4a0", "intensity": 0.5, "radius": 110, "height": 40 } } },
+    "_pixelPanelsNote": "pixelPanels: cards, sheets, stat cells, readout bubbles and shop boxes get pixel-art frames drawn in the page colours (false = the old rounded look).",
+    "pixelPanels": true,
     "_ballLookNote": "How balls are drawn. shading: three tones stepped toward the light plus a highlight. shadow: a shadow on the floor; shadowLength: how far it reaches past the ball (share of the ball's radius). stripe: a light band that rolls as the ball moves. mouseLight: the light follows the mouse (otherwise it stays top left). lightEase: how quickly the light catches up with the mouse (lower is smoother). lightHeight: how high above the table the light hangs (higher is softer when the mouse is over a ball). weaponShadow and weaponShadowOffset: weapons cast a shadow too. weaponLight: how much brighter a weapon gets when it points toward the light. pixelArt and pixel: draw shading, highlights, outlines, shadows and light pools as chunky pixels, one pixel per 'pixel' arena units (false = smooth). Opacities are 0 to 1. A ball with its own sprite only gets the shadow.",
     "ballLook": { "shading": true, "shadow": true, "stripe": false, "mouseLight": true, "highlight": true, "shadowOpacity": 0.42, "stripeOpacity": 0.55, "lightEase": 3, "lightHeight": 120, "shadowLength": 0.5, "weaponShadow": true, "weaponShadowOffset": 7, "weaponLight": 0.25, "pixelArt": true, "pixel": 1.5 },
     "weapons": { "blade": "#e8edf2", "guard": "#ffb72e", "shaft": "#b08968", "hammerHead": "#9aa5b1", "bow": "#d4a373", "shield": "#cbd5e1" },

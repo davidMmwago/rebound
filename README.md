@@ -2,7 +2,7 @@
 
 These are the game's source files, mirrored from the published artifact. The game was called Ricochet Rogue until 15 November 2026; the handoff guide and backlog still use that name.
 
-- **Mirrored from artifact version:** `1794824986-c55a` (15 November 2026, data file version 8)
+- **Mirrored from artifact version:** `1794826193-cc71` (15 November 2026, data file version 8)
 - **Live game:** https://claude.ai/artifact/BYcf2LpJCXJFJxvMDP7jBq (slug `55656ac0-469b-4b9e-a7c0-7e221b0b84ac`, artifact title "Rebound")
 - **Read first:** `claude/ricochet-rogue-handoff-guide.md` explains every file, the rules, and how to test. **`claude/rebound-systems.md` explains how damage, stats, sources, tags, counters, overflow, statuses and knockback work now; read it before writing any augment, trophy or new system.** `claude/ricochet-rogue-backlog.md` lists agreed work that is not done yet. `claude/augment-art-list.md` lists the art each augment needs. Where the guide disagrees with the systems doc or with "Changes since the guide" below, those are newer.
 
@@ -42,6 +42,8 @@ Asset files are binary, so they are not mirrored here. The artifact currently ho
 | `assets/fonts/alpha-beta-brk.ttf` + `alpha-beta-brk-readme.txt` | Owner's upload, unaltered. Freeware by Brian Kent, who asks that his text file stays with the font |
 
 ## Changes since the guide
+
+**Pixel-art panels, Mitosis 65% (16 November 2026).** Mitosis `hpPercent` is 65 (owner's pick after a test: alone tier 4 54% vs 72% with nothing; with Venom Gland + Festering tier 6 28% vs 22% without Mitosis; Mirror Ball on Mitosis tier 4 93%). Cards, the recap sheet, stat cells, the Power/Mult/Last hit bubbles, shop tune-up and item boxes, the HP bar, the weapon cards and trophy choices now have pixel-art frames: `pixelFrames()` in `ui.js` draws them at start-up in the theme's page colours (1-pixel outline with stepped corners, light top/left and dark bottom/right inner edge, 2-pixel drop shadow on raised boxes, 3 screen pixels per art pixel) as CSS border images (`--pf-card`, `--pf-cell`...; slices in the "pixel-art panels" section of `style.css`, all under `html.pxui`). `theme.pixelPanels: false` brings back the rounded look. Buttons and the header chips are unchanged.
 
 **Tweaks (16 November 2026, later).** Mitosis halves keep half Max HP again (`hpPercent` 50, applied once even with Mirror Ball or Resonator on it) on top of the 50% damage cut: alone it is now a downgrade (tier 4 solo 77% → 35%), it pays off with Mirror Ball/Resonator and Minis (Resonator → Mirror Ball → Mitosis + Fission + Hive Mind + Pack Tactics: 100% at tier 4, 80% at tier 6). Reroll is a big button in the shop's top right corner (`.shop-h`, `.shop .reroll`). Consumable tag reads **Single Use**, hint and bag line "Single Use: click to activate at the start of the next fight." The Power × Mult = Last hit readout moved from the header to under Your ball on the left (`readoutHtml()`; Power × Mult on one row, Last hit below). Caps next to stats have no hover hint. Money is clearer: the shop header shows your gold big (1.5× title size, bigger than Reroll), the gold chip in the header is gold-outlined in the title font, and the interest line is in the money colour. Card keywords inside tune-up and item text no longer break onto their own line.
 

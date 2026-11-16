@@ -44,6 +44,37 @@ function applyTheme(){
  if(AS.images.logo)logo.innerHTML='<img class="logo-img" src="'+AS.images.logo+'" alt="'+name+'">';
  else logo.innerHTML='<i></i>'+TX.logoFirst+(TX.logoSecond?' <span>'+TX.logoSecond+'</span>':'');
  document.title=name;
+ if(TH.pixelPanels!==false){pixelFrames();document.documentElement.classList.add('pxui')}
+}
+/* Pixel-art panels (theme.pixelPanels): every card, sheet, stat cell, readout bubble and shop box gets a frame drawn here in the theme's colours:
+   a 1-pixel outline with stepped corners, a light inner edge on top and left and a dark one on bottom and right (swapped for sunken cells), and
+   for raised boxes a 2-pixel drop shadow. Drawn 3 screen pixels per art pixel, like the card frames, and used as CSS border images (--pf-*;
+   the slices are in the "pixel-art panels" section of style.css). */
+function pixFrame(o){
+ const S=3,pad=o.pad==null?2:o.pad,sh=o.shadow?2:0,e=2+pad,w=e*2+2,h=e*2+2+sh,bh=h-sh;
+ const cv_=document.createElement('canvas');cv_.width=w*S;cv_.height=h*S;const g=cv_.getContext('2d');
+ const body=(x,y)=>{if(x<0||y<0||x>=w||y>=bh)return false;const cx=Math.min(x,w-1-x),cy=Math.min(y,bh-1-y);return cx+cy>=2};   // stepped corners: the 3 corner pixels are cut
+ const line=(x,y)=>body(x,y)&&(!body(x-1,y)||!body(x+1,y)||!body(x,y-1)||!body(x,y+1));
+ const px=(x,y,col)=>{g.fillStyle=col;g.fillRect(x*S,y*S,S,S)};
+ if(sh)for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(body(x,y-sh)&&!body(x,y))px(x,y,o.drop||o.line);
+ for(let y=0;y<bh;y++)for(let x=0;x<w;x++){if(!body(x,y))continue;
+  if(line(x,y)){px(x,y,o.line);continue}
+  const tl=line(x-1,y)||line(x,y-1),br=line(x+1,y)||line(x,y+1);
+  px(x,y,tl?(o.inset?o.lo:o.hi):br?(o.inset?o.hi:o.lo):o.fill)}
+ return'url('+cv_.toDataURL()+')';
+}
+function pixelFrames(){
+ const P=TH.page,st=document.documentElement.style,lt=c=>mixHex(c,'#ffffff',.1),dk=c=>mixHex(c,'#000000',.3);
+ const set=(k,o)=>st.setProperty('--pf-'+k,pixFrame(Object.assign({line:P.drop,hi:lt(o.fill),lo:dk(o.fill)},o)));
+ set('card',{fill:P.panel,shadow:true});
+ set('boss',{fill:mixHex(P.panel,'#5a2440',.35),shadow:true});
+ set('sheet',{fill:P.panel,line:P.chalk,drop:P.drop,shadow:true});
+ set('cell',{fill:P.ink,pad:1,inset:true,hi:mixHex(P.ink,'#ffffff',.06),lo:'#000000'});
+ set('box',{fill:P.panel2,pad:1});
+ set('item',{fill:'#1e3833',pad:1});
+ set('btn',{fill:P.panel2,pad:1,shadow:true});
+ set('pw',{fill:P.pow,pad:1,shadow:true});set('ml',{fill:P.mult,pad:1,shadow:true});set('dm',{fill:P.chalk,pad:1,shadow:true});
+ set('bar',{fill:P.ink,pad:0,inset:true,lo:'#000000',hi:mixHex(P.ink,'#ffffff',.06)});
 }
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=p.statsOpen!==false;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
 function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false,light:G.lightChosen?lightMode:undefined}))}catch(e){}}

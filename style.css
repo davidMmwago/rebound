@@ -332,3 +332,22 @@ main{grid-template-areas:"stage" "side" "left"}
 .shop .shop-h h3{font-size:calc(var(--dpx,32.68px)*1.5);align-items:center}   /* the Shop title stays bigger than the Reroll button */
 /* the shop title and your money are bigger than the reroll button (1.5x the title size, still pixel-sharp) */
 .shop .shop-h h3,.shop h3 .money{font-size:calc(var(--dpx,32.68px)*1.5);line-height:1}
+
+/* ---------- pixel-art panels (theme.pixelPanels; frames drawn by pixelFrames() in ui.js) ----------
+   Slices are in screen pixels, 3 per art pixel: big frames (cards, sheets) 12 on top and sides and 18 at the bottom (the drop shadow);
+   small raised frames (buttons, readout bubbles) 9 and 15; flat boxes 9; the HP bar 6. Set theme.pixelPanels to false for the old rounded look. */
+html.pxui .card,html.pxui .sheet,html.pxui .stats div,html.pxui .tune,html.pxui .readout .ro,html.pxui .hpbar,html.pxui .weapon,html.pxui .trophy-pick button{
+  border-style:solid;border-radius:0;box-shadow:none;background:none;image-rendering:pixelated;border-image-repeat:stretch}
+html.pxui .card{border-width:12px 12px 18px;border-image-source:var(--pf-card);border-image-slice:12 12 18 fill;padding:2px 4px 0}
+html.pxui .next.is-boss{border-image-source:var(--pf-boss)}
+html.pxui .next.peeking{border-image-source:var(--pf-card);outline:2px dashed var(--gold);outline-offset:-8px}
+html.pxui .sheet{border-width:12px 12px 18px;border-image-source:var(--pf-sheet);border-image-slice:12 12 18 fill;padding:4px 6px 2px}
+html.pxui .stats div{border-width:9px;border-image-source:var(--pf-cell);border-image-slice:9 fill;padding:0 2px}
+html.pxui .tune{border-width:9px;border-image-source:var(--pf-box);border-image-slice:9 fill;padding:0 2px}
+html.pxui .tunes.items .tune{border-image-source:var(--pf-item)}
+html.pxui .readout .ro{border-width:9px 9px 15px;border-image-slice:9 9 15 fill;padding:0 4px}
+html.pxui .readout .pw{border-image-source:var(--pf-pw)} html.pxui .readout .ml{border-image-source:var(--pf-ml)} html.pxui .readout .dm{border-image-source:var(--pf-dm)}
+html.pxui .hpbar{border-width:6px;border-image-source:var(--pf-bar);border-image-slice:6 fill;height:30px;overflow:hidden}
+html.pxui .weapon,html.pxui .trophy-pick button{border-width:9px 9px 15px;border-image-source:var(--pf-btn);border-image-slice:9 9 15 fill;padding:2px 4px 0}
+html.pxui .weapon:active:not(:disabled),html.pxui .trophy-pick button:active:not(:disabled){box-shadow:none}
+html.pxui .shopview .shop{border:0;border-image:none;padding:4px}
