@@ -22,7 +22,9 @@ const CORE_PROBLEMS=[];
    Cyclone, Arsenal, Barrage, Adamant) removes one for the rest of the run (run.uncap). Without a cap, rules.uncapped still keeps the physics sane. */
 const CAP_KEYS=['spd','spin','blades','volley','armor'];
 function baseCap(k){const CB=RULES.combat;return k==='spd'?CB.maxPlayerSpeed:k==='spin'?CB.maxSpin:k==='blades'?4:k==='volley'?RULES.projectiles.maxPerVolley:CB.armorMaxReductionPercent}
-function capOf(run,k){if(run&&run.uncap&&run.uncap[k]){const U=RULES.uncapped||{};return k==='spd'?(U.speed||1600):k==='spin'?(U.spin||120):k==='blades'?(U.blades||16):k==='volley'?(U.volley||40):100}return baseCap(k)}
+function capOf(run,k){if(run&&run.uncap&&run.uncap[k]){const U=RULES.uncapped||{};return k==='spd'?(U.speed||1600):k==='spin'?(U.spin||120):k==='blades'?(U.blades||16):k==='volley'?(U.volley||40):100}return baseCap(k)+capRaise(run,k)}
+/* Cap tune-ups (tuneUps entries with "cap"): each purchase raises that cap by its amount for the rest of the run. Armor's cap never goes past 95%. */
+function capRaise(run,k){if(!run||!run.tune)return 0;let r=0;for(const id in TUNE)if(TUNE[id].cap===k)r+=TUNE[id].amount*(run.tune[id]||0);return k==='armor'?Math.min(r,95-baseCap(k)):r}
 /* Impact frames (DATA.impact). The simulation only reports big hits; ui.js decides what to show. */
 const IMP=DATA.impact&&DATA.impact.enabled!==false&&Array.isArray(DATA.impact.levels)&&DATA.impact.levels.length?DATA.impact:null;
 const IMP_MIN=IMP?Math.min.apply(null,IMP.levels.map(l=>l.minPercentOfMaxHp)):Infinity;
@@ -445,7 +447,9 @@ for(const id of dkeys(DATA.augments)){const d=DATA.augments[id];
  AUG[id]=Object.assign({id,name:d.name,rar:Math.max(0,RAR.indexOf(d.rarity)),tags:d.tags||[],desc:tpl(d.text,d.values),v:d.values||{}},AUG_CODE[id]||{});if(SHOW_MULT[id])AUG[id].showMult=SHOW_MULT[id]}
 
 const TUNE={},TUNE_IDS=['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini'];
-for(const k of TUNE_IDS){const d=DATA.tuneUps[k];TUNE[k]={name:d.name,desc:tpl(d.text,{amount:d.amount}),amount:d.amount,weight:d.weight==null?1:d.weight}}   // weight: how often it shows up in the shop (1 = normal)
+/* The eleven fixed ids, then any cap tune-ups (an entry with "cap": spd, spin, blades, volley or armor). */
+for(const k of Object.keys(DATA.tuneUps))if(k[0]!=='_'&&!TUNE_IDS.includes(k)&&DATA.tuneUps[k]&&CAP_KEYS.includes(DATA.tuneUps[k].cap))TUNE_IDS.push(k);
+for(const k of TUNE_IDS){const d=DATA.tuneUps[k];TUNE[k]={name:d.name,desc:tpl(d.text,{amount:d.amount}),amount:d.amount,weight:d.weight==null?1:d.weight,cap:d.cap||null,cost:d.cost}}   // weight: how often it shows up in the shop (1 = normal)
 /* Trophy behaviour by id. Trophies are a source (section 4): they can use any hook an augment can, with the same signature, and run before
    every augment. stats(t,S,P,v) runs when the player's stats are worked out. Rule changes (weak, coupon...) are checked by id where they apply. */
 const TROPHY_CODE={
@@ -897,7 +901,7 @@ function step(S,dt){
 /* A run is plain JSON so it can be snapshotted: no functions, no references to fight state. */
 function newRun(weapon,seed){
  const RN=RULES.run;
- const run={seed,rs:seed|0,weapon,tier:1,stage:0,gold:RN.startGold,augs:[],slots:RN.startSlots,shelf:0,intCap:RULES.economy.interestCap,tune:{hp:0,pow:0,spd:0,spin:0,reach:0,armor:0,crit:0,regen:0,knock:0,impact:0,mini:0},trophies:[],bosses:[],
+ const run={seed,rs:seed|0,weapon,tier:1,stage:0,gold:RN.startGold,augs:[],slots:RN.startSlots,shelf:0,intCap:RULES.economy.interestCap,tune:Object.fromEntries(TUNE_IDS.map(k=>[k,0])),trophies:[],bosses:[],
   shop:null,enc:null,pending:null,bag:[],active:[],endless:false,grown:0,stats:{fights:0,kills:0,bestHit:0,dmg:0}};
  const pool=BOSS_POOL.slice();for(let i=pool.length-1;i>0;i--){const j=rnd(run)*(i+1)|0;[pool[i],pool[j]]=[pool[j],pool[i]]}
  const need=RN.tiersToWin-1;run.bosses=[];   // a boss with minTier never comes before that tier; the shuffled pool is otherwise used in order
@@ -936,9 +940,9 @@ function genEnc(run){
 }
 function augCost(run,id){return Math.max(1,COST[AUG[id].rar]-(has(run,'coupon')?TROPHY.coupon.v.discount:0))}
 function sellValue(run,id){const c=COST[AUG[id].rar];return has(run,'recycle')?c:Math.floor(c*RULES.economy.sellPercent/100)}
-function tuneCost(run,k){return RULES.economy.tuneUpBaseCost+RULES.economy.tuneUpCostStep*run.tune[k]}
+function tuneCost(run,k){return(TUNE[k].cost!=null?TUNE[k].cost:RULES.economy.tuneUpBaseCost)+RULES.economy.tuneUpCostStep*(run.tune[k]||0)}   // cap tune-ups can set their own starting "cost"
 /* needs "blade" (augments and tune-ups in the data): only offered to weapons with a blade or bow, not Bare Fists, where Spin, Reach and Knockback do nothing. */
-const fits=(run,d)=>!(d&&d.needs==='blade'&&WEAPONS[run.weapon].fist);
+const fits=(run,d)=>!(d&&((d.needs==='blade'&&WEAPONS[run.weapon].fist)||(d.needs==='ranged'&&!(WEAPONS[run.weapon].type==='bow'||run.augs.some(x=>x.id==='sidearm'||x.id==='multi')))));   // ranged: Bow, or Sidearm or Multishot owned
 function rollShop(run,keepReroll){
  const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id)),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!(AUG[k].uncap&&run.uncap&&run.uncap[AUG[k].uncap]));
  const w=DATA.rarities.map(r=>r.shopWeight+r.shopWeightPerTier*run.tier);if(has(run,'taste'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.taste.v.mult;   // Rare Taste: the third rarity (Rare) and every rarity above it
@@ -947,7 +951,7 @@ function rollShop(run,keepReroll){
   let c=ids.filter(k=>AUG[k].rar===r&&!owned.has(k)&&!offers.some(o=>o.id===k));
   if(!c.length)c=ids.filter(k=>!owned.has(k)&&!offers.some(o=>o.id===k));
   if(c.length)offers.push({id:pick(run,c),sold:false})}
- const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
+ const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])&&!(TUNE[k].cap&&run.uncap&&run.uncap[TUNE[k].cap])&&!(TUNE[k].cap==='armor'&&capRaise(run,'armor')>=95-baseCap('armor'))),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
  while(tunes.length<nt){const left=tk.filter(k=>!tunes.some(t=>t.k===k));let tw=0;for(const k of left)tw+=TUNE[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=TUNE[q].weight;if(x<0){k=q;break}}tunes.push({k,sold:false})}   // weighted: Hatchling is rarer
  const base=has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost;
  const ik=Object.keys(ITEM),items=[];for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k));if(left.length)items.push({id:pick(run,left),sold:false})}
@@ -955,7 +959,7 @@ function rollShop(run,keepReroll){
 }
 function buyOffer(run,i){const o=run.shop.offers[i];if(!o||o.sold||run.augs.length>=run.slots)return false;const c=augCost(run,o.id);if(run.gold<c)return false;run.gold-=c;o.sold=true;if(AUG[o.id].uncap)(run.uncap||(run.uncap={}))[AUG[o.id].uncap]=1;   // cap Legendaries: the cap is gone for the rest of the run
  run.augs.push({id:o.id,n:0,f:{}});return true}
-function buyTune(run,i){const t=run.shop.tunes[i];if(!t||t.sold)return false;const c=tuneCost(run,t.k);if(run.gold<c)return false;run.gold-=c;t.sold=true;run.tune[t.k]++;return true}
+function buyTune(run,i){const t=run.shop.tunes[i];if(!t||t.sold)return false;const c=tuneCost(run,t.k);if(run.gold<c)return false;run.gold-=c;t.sold=true;run.tune[t.k]=(run.tune[t.k]||0)+1;return true}
 function reroll(run){const c=run.shop.reroll;if(run.gold<c)return false;run.gold-=c;rollShop(run,true);return true}
 function sellAug(run,i){const a=run.augs[i];if(!a)return false;run.gold+=sellValue(run,a.id);run.augs.splice(i,1);return true}
 /* Moves the augment at socket i so it ends up at socket j (drag and drop). */

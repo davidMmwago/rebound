@@ -8,7 +8,7 @@
     "You can delete a whole augment, enemy or boss to remove it from the game. Adding a new enemy or boss works from this file alone. Adding a new augment or trophy also needs code.",
     "Keys that start with an underscore are notes for humans and are ignored by the game."
   ],
-  "version": 8,
+  "version": 9,
 
   "rules": {
     "_note": "Distances are in arena units (the arena is 'arena.size' units wide). Speeds are units per second. Spin is radians per second (6.28 is one full turn a second).",
@@ -105,7 +105,7 @@
 
   "admin": {
     "_note": "showToggle puts an Admin button in the header. Admin mode adds a panel for overriding the player's stats and triggering impact frames. Set it to false before sharing the game.",
-    "showToggle": false
+    "showToggle": true
   },
 
   "_raritiesNote": "Rarities in order, lowest first. 'color' tints the augment's name and glow. 'metal' is the card body: three colors for the highlight, the main tone and the shadow of the metal. The fourth rarity always glows and the fifth also gets a sweeping shine (cards.css, classes c3 and c4).",
@@ -548,18 +548,24 @@
   },
 
   "tuneUps": {
-    "_note": "Permanent stat upgrades sold in the shop. The eleven ids are fixed. 'amount' is what one purchase adds. Optional 'weight' sets how often it shows up in the shop (1 = normal, 0.35 = about a third as often). needs: \"blade\" means Bare Fists never see it.",
-    "hp": { "name": "Padding", "text": "+{amount} Max HP", "amount": 15 },
-    "pow": { "name": "Grit", "text": "+{amount} Power", "amount": 2 },
-    "spd": { "name": "Wax", "text": "+{amount}% Speed", "amount": 8 },
-    "spin": { "name": "Grease", "text": "+{amount}% Spin", "amount": 10, "needs": "blade" },
-    "reach": { "name": "Extension", "text": "+{amount}% Reach", "amount": 10, "needs": "blade" },
-    "armor": { "name": "Plating", "text": "+{amount} Armor", "amount": 1 },
-    "crit": { "name": "Polish", "text": "+{amount}% Crit", "amount": 5 },
-    "regen": { "name": "Patch Kit", "text": "+{amount} HP/s", "amount": 1 },
-    "knock": { "name": "Counterweight", "text": "+{amount}% Knockback", "amount": 15, "needs": "blade" },
-    "impact": { "name": "Bumper Pads", "text": "+{amount} Impact", "amount": 40 },
-    "mini": { "name": "Hatchling", "text": "+{amount} Mini at fight start", "amount": 1 }
+    "_note": "Permanent stat upgrades sold in the shop. The eleven ids hp to mini are fixed. 'amount' is what one purchase adds. Optional 'weight' sets how often it shows up in the shop (1 = normal, 0.35 = about a third as often). needs: \"blade\" means Bare Fists never see it; \"ranged\" means only the Bow, or a run that owns Sidearm or Multishot, sees it. 'color' tints the shop box and the name. 'stat' is the word in 'text' that gets a hover hint and 'tip' is that hint (stats that are glossary keywords, like Power, use the glossary line instead).",
+    "_capNote": "Cap tune-ups: any other id with \"cap\" (spd, spin, blades, volley or armor) raises that cap by 'amount' per purchase for the rest of the run. Optional 'cost' is its starting price (tuneUpCostStep still adds on per purchase). Not offered once a cap Legendary has removed that cap. Armor's cap never goes past 95%.",
+    "hp": { "name": "Padding", "text": "+{amount} Max HP", "amount": 15, "stat": "Max HP", "color": "#ff8a8a", "tip": "How much damage your ball can take before it falls." },
+    "pow": { "name": "Grit", "text": "+{amount} Power", "amount": 2, "stat": "Power", "color": "#8c9eff" },
+    "spd": { "name": "Wax", "text": "+{amount}% Speed", "amount": 8, "stat": "Speed", "color": "#8fd3ff", "tip": "How fast your ball moves. Body hits and some augments scale with it." },
+    "spin": { "name": "Grease", "text": "+{amount}% Spin", "amount": 10, "needs": "blade", "stat": "Spin", "color": "#c6a6ff", "tip": "How fast your blade turns. On the Bow: fire rate." },
+    "reach": { "name": "Extension", "text": "+{amount}% Reach", "amount": 10, "needs": "blade", "stat": "Reach", "color": "#a6e3b8" },
+    "armor": { "name": "Plating", "text": "+{amount} Armor", "amount": 1, "stat": "Armor", "color": "#c9bfdc" },
+    "crit": { "name": "Polish", "text": "+{amount}% Crit", "amount": 5, "stat": "Crit", "color": "#ffd23f" },
+    "regen": { "name": "Patch Kit", "text": "+{amount} HP/s", "amount": 1, "stat": "HP/s", "color": "#9ff0a0", "tip": "Max HP your ball regains every second." },
+    "knock": { "name": "Counterweight", "text": "+{amount}% Knockback", "amount": 15, "needs": "blade", "stat": "Knockback", "color": "#ffcf8a" },
+    "impact": { "name": "Bumper Pads", "text": "+{amount} Impact", "amount": 40, "stat": "Impact", "color": "#ffb88a" },
+    "mini": { "name": "Hatchling", "text": "+{amount} Mini at fight start", "amount": 1, "stat": "Mini", "color": "#ffe9a3" },
+    "capspd": { "name": "Tailwind", "text": "+{amount} max Speed", "amount": 60, "cap": "spd", "cost": 5, "weight": 0.5, "stat": "max Speed", "color": "#8fd3ff", "tip": "Raises the Speed cap: the most your Speed can be. Past a cap the extra is overflow." },
+    "capspin": { "name": "Ball Bearing", "text": "+{amount} max Spin", "amount": 3, "cap": "spin", "cost": 5, "weight": 0.5, "needs": "blade", "stat": "max Spin", "color": "#c6a6ff", "tip": "Raises the Spin cap: the most your Spin can be. Past a cap the extra is overflow." },
+    "capblades": { "name": "Spare Hilt", "text": "+{amount} max Blades", "amount": 1, "cap": "blades", "cost": 6, "weight": 0.4, "needs": "blade", "stat": "max Blades", "color": "#dfe4ee", "tip": "Raises the blade cap: the most blades you can carry. Past a cap the extra is overflow." },
+    "capvolley": { "name": "Big Quiver", "text": "+{amount} max Volley", "amount": 2, "cap": "volley", "cost": 5, "weight": 0.5, "needs": "ranged", "stat": "max Volley", "color": "#e8c98f", "tip": "Raises the Volley cap: the most projectiles in one volley." },
+    "caparmor": { "name": "Rivets", "text": "+{amount}% max Armor block", "amount": 5, "cap": "armor", "cost": 5, "weight": 0.5, "stat": "max Armor block", "color": "#c9bfdc", "tip": "Raises the most of each hit Armor can block." }
   },
 
   "trophies": {

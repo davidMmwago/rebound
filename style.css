@@ -351,3 +351,28 @@ html.pxui .hpbar{border-width:6px;border-image-source:var(--pf-bar);border-image
 html.pxui .weapon,html.pxui .trophy-pick button{border-width:9px 9px 15px;border-image-source:var(--pf-btn);border-image-slice:9 9 15 fill;padding:2px 4px 0}
 html.pxui .weapon:active:not(:disabled),html.pxui .trophy-pick button:active:not(:disabled){box-shadow:none}
 html.pxui .shopview .shop{border:0;border-image:none;padding:4px}
+/* header chips: same height, text centred (the bigger gold chip made the row taller) */
+.chips{align-items:center}
+.chips span{display:inline-flex;align-items:center;justify-content:center;gap:.4em;min-height:36px;line-height:1}
+.chips .gold{gap:0}
+
+/* ---------- shop tune-up and item boxes: augment-style hover, a faint hue per stat ----------
+   Each box has data-tilt (the card hover code in ui.js lifts and tilts it and sets --mx/--my) and an .tu-fx layer for the stepped shine.
+   --tu is the tune-up's colour from the data ("color"): it tints the name, and the box (pixel frames: --pf-tu-<id>; without them: the background). */
+.tune{position:relative;transition:none}
+.tune>*{position:relative;z-index:1}
+.tune>.tu-fx{position:absolute;inset:-3px;z-index:2;pointer-events:none;opacity:0;transition:opacity .2s ease;
+  background:radial-gradient(circle at calc(var(--mx,50%) - 6px) calc(var(--my,50%) - 6px),#ffffff24 0 21px,#ffffff12 21px 42px,#ffffff08 42px 63px,transparent 63px)}
+.tune.tilting{transition:none;z-index:3;filter:drop-shadow(0 3px 0 var(--drop))}   /* a hard pixel shadow under the lifted box; no blur */
+.tune.tilting>.tu-fx{opacity:1}
+.tune.sold.tilting{filter:none}
+.tune[style]>div>b{color:var(--tu)}
+html:not(.pxui) .tune[style]{background:color-mix(in srgb,var(--panel2) 86%,var(--tu))}
+html:not(.pxui) .tune>.tu-fx{inset:0;border-radius:8px;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),#ffffff24 0 21px,#ffffff12 21px 42px,#ffffff08 42px 63px,transparent 63px)}
+/* consumables: the box is the pixel frame only, so the green no longer shows past the outline and its cut corners */
+html.pxui .tunes.items .tune{background:none}
+
+/* ---------- pixel buy buttons: the gold pill on tune-up and item boxes (art from pixelButtons() in ui.js, 36 px tall incl. its drop shadow) ---------- */
+html.pxui .tune .buy{height:36px;box-sizing:border-box;padding:0 3px 6px;border-style:solid;border-width:0 15px;border-radius:0;box-shadow:none;background:none;
+  border-image-source:var(--pb-pill);border-image-slice:0 15 0 15 fill;border-image-repeat:stretch;image-rendering:pixelated;line-height:30px;transition:none}
+html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border-image-source:var(--pb-pill-down);padding:6px 3px 0}

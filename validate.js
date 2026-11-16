@@ -68,9 +68,14 @@ function validateGameData(D){
   if(!Array.isArray(o.tags))out.push(p+'.tags must be a list in [ ]');if('needs' in o&&o.needs!=='blade')out.push(p+'.needs can only be "blade"');
   if(!isObj(o.values))out.push(p+'.values must be an object in { } (use {} if it has no numbers)');else{for(const f of keys(o.values))num(o.values,f,p+'.values');holes(o.text,o.values,p+'.text')}}
 
+ const tuneLook=(o,p)=>{if('color' in o&&!/^#[0-9a-fA-F]{6}$/.test(o.color))out.push(p+'.color must be a colour like "#8fd3ff"');for(const f of['stat','tip'])if(f in o&&typeof o[f]!=='string')out.push(p+'.'+f+' must be text in quotes');if('cost' in o)num(o,'cost',p)};
  // tune-ups
- for(const k of['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eleven tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen, knock, impact, mini');continue}if('weight' in o)num(o,'weight',p);if('needs' in o&&o.needs!=='blade')out.push(p+'.needs can only be "blade"');
-  str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text')}
+ for(const k of['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini']){const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' is missing. The eleven tune-up ids are fixed: hp, pow, spd, spin, reach, armor, crit, regen, knock, impact, mini');continue}if('weight' in o)num(o,'weight',p);if('needs' in o&&o.needs!=='blade'&&o.needs!=='ranged')out.push(p+'.needs can only be "blade" or "ranged"');
+  str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text');tuneLook(o,p)}
+ // cap tune-ups: any other tune-up id must have "cap"
+ for(const k of keys(D.tuneUps)){if(['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini'].includes(k))continue;const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' must be an object');continue}
+  if(!['spd','spin','blades','volley','armor'].includes(o.cap))out.push(p+' is not one of the eleven fixed tune-ups, so it must be a cap tune-up: "cap" must be spd, spin, blades, volley or armor');
+  str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text');if('weight' in o)num(o,'weight',p);if('needs' in o&&o.needs!=='blade'&&o.needs!=='ranged')out.push(p+'.needs can only be "blade" or "ranged"');tuneLook(o,p)}
 
  // consumables (optional)
  if('consumables' in D){if(!isObj(D.consumables))out.push('"consumables" must be an object');else for(const k of keys(D.consumables)){const p='consumables.'+k,o=D.consumables[k];if(!isObj(o)){out.push(p+' must be an object');continue}

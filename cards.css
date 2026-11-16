@@ -209,3 +209,8 @@ body.drag-active{cursor:grabbing} body.drag-active .aug[data-drag]{cursor:grabbi
   .framed.offer .ac-plate{padding-right:calc(var(--fec,48px) - 24px)}
   .framed .ac-text{-webkit-line-clamp:2;line-clamp:2}
 }
+
+/* ===== pixel buy button: a gold coin, 19 pixels across shown 3x, with a 2-pixel drop shadow (art from pixelButtons() in ui.js) ===== */
+html.pxui .acard .buy{width:57px;height:63px;padding:0 0 6px;border:0;border-radius:0;box-shadow:none;transition:none;
+  background:var(--pb-coin) 0 0/57px 63px no-repeat;image-rendering:pixelated;gap:0}
+html.pxui .acard .buy:active:not(:disabled){transform:none;box-shadow:none;background-image:var(--pb-coin-down);padding:6px 0 0}

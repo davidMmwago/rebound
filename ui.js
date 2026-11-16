@@ -63,6 +63,34 @@ function pixFrame(o){
   px(x,y,tl?(o.inset?o.lo:o.hi):br?(o.inset?o.hi:o.lo):o.fill)}
  return'url('+cv_.toDataURL()+')';
 }
+const PXF={};   // which per-tune-up frames exist
+/* Pixel-art buy buttons (part of theme.pixelPanels): a gold coin for the augment Buy button and a gold pill for the tune-up and item Buy buttons,
+   each with a pressed copy (no drop shadow, sunk by it). 3 screen pixels per art pixel. Set as --pb-coin, --pb-coin-down, --pb-pill, --pb-pill-down;
+   the CSS is in the "pixel buy buttons" sections of cards.css (coin) and style.css (pill). Colour: theme.page.gold. */
+function pixShape(w,bh,inside,o){
+ const S=3,sh=2,h=bh+sh,out={};
+ for(const down of[0,1]){
+  const cv_=document.createElement('canvas');cv_.width=w*S;cv_.height=h*S;const g=cv_.getContext('2d'),oy=down?sh:0;
+  const body=(x,y)=>x>=0&&y>=0&&x<w&&y<bh&&inside(x,y);
+  const line=(x,y)=>body(x,y)&&(!body(x-1,y)||!body(x+1,y)||!body(x,y-1)||!body(x,y+1));
+  const px=(x,y,c)=>{g.fillStyle=c;g.fillRect(x*S,(y+oy)*S,S,S)};
+  if(!down)for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(body(x,y-sh)&&!body(x,y))px(x,y,o.line);
+  for(let y=0;y<bh;y++)for(let x=0;x<w;x++){if(!body(x,y))continue;
+   if(line(x,y)){px(x,y,o.line);continue}
+   const tl=line(x-1,y)||line(x,y-1),br=line(x+1,y)||line(x,y+1),tl2=line(x-2,y)||line(x,y-2)||line(x-1,y-1);
+   px(x,y,tl?o.hi:br?o.lo:(tl2&&o.hi2)?o.hi2:o.fill)}
+  if(o.glint)for(const[x,y]of o.glint)if(body(x,y)&&!line(x,y))px(x,y,o.shine);
+  out[down?'down':'up']='url('+cv_.toDataURL()+')'}
+ return out;
+}
+function pixelButtons(){
+ const P=TH.page,st=document.documentElement.style,c=P.gold;
+ const o={fill:c,line:P.drop,hi:mixHex(c,'#ffffff',.55),hi2:mixHex(c,'#ffffff',.18),lo:mixHex(c,'#000000',.32),shine:'#ffffff'};
+ const D=19,R=D/2-.05,coin=pixShape(D,D,(x,y)=>(x+.5-D/2)**2+(y+.5-D/2)**2<=R*R,Object.assign({glint:[[5,4],[4,5]]},o));
+ st.setProperty('--pb-coin',coin.up);st.setProperty('--pb-coin-down',coin.down);
+ const W=11,H=10,r=5,pill=pixShape(W,H,(x,y)=>{const cx=Math.min(Math.max(x+.5,r),W-r),cy=Math.min(Math.max(y+.5,r),H-r);return(x+.5-cx)**2+(y+.5-cy)**2<=r*r-.2},o);
+ st.setProperty('--pb-pill',pill.up);st.setProperty('--pb-pill-down',pill.down);
+}
 function pixelFrames(){
  const P=TH.page,st=document.documentElement.style,lt=c=>mixHex(c,'#ffffff',.1),dk=c=>mixHex(c,'#000000',.3);
  const set=(k,o)=>st.setProperty('--pf-'+k,pixFrame(Object.assign({line:P.drop,hi:lt(o.fill),lo:dk(o.fill)},o)));
@@ -75,6 +103,8 @@ function pixelFrames(){
  set('btn',{fill:P.panel2,pad:1,shadow:true});
  set('pw',{fill:P.pow,pad:1,shadow:true});set('ml',{fill:P.mult,pad:1,shadow:true});set('dm',{fill:P.chalk,pad:1,shadow:true});
  set('bar',{fill:P.ink,pad:0,inset:true,lo:'#000000',hi:mixHex(P.ink,'#ffffff',.06)});
+ for(const k of Object.keys(DATA.tuneUps)){const c=k[0]!=='_'&&DATA.tuneUps[k]&&DATA.tuneUps[k].color;if(c){set('tu-'+k,{fill:mixHex(P.panel2,c,TH.tuneHue==null?.14:TH.tuneHue),pad:1});PXF['tu-'+k]=1}}   // a faint hue per stat (theme.tuneHue, default 0.14)
+ pixelButtons();
 }
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=p.statsOpen!==false;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
 function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false,light:G.lightChosen?lightMode:undefined}))}catch(e){}}
@@ -352,14 +382,25 @@ function shopCard(run){
    foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});
  h+='</div><div class="tunes">';
  sh.tunes.forEach((tu,i)=>{const d=TUNE[tu.k],c=tuneCost(run,tu.k);
-  h+=`<div class="tune${tu.sold?' sold':''}">${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${rich(d.desc)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
+  h+=`<div class="tune${tu.sold?' sold':''}${d.cap?' cap':''}" data-tilt="flat"${tuneStyle(tu.k)}><i class="tu-fx" aria-hidden="true"></i>${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${tuneText(tu.k)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
  h+='</div>';
  if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=CONS.bagSize;h+=`<div class="tunes items">`;
-  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}">${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
+  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}" data-tilt="flat"><i class="tu-fx" aria-hidden="true"></i>${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
  const int=Math.min(run.intCap,Math.floor(run.gold/E.interestPerGold));
  h+=`<div class="shop-f"><span class="interest">${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
  return h;
 }
+/* Tune-up text: the stat word gets its colour and a hover hint. Glossary keywords (Power, Crit...) already get both from rich(); the rest (Max HP,
+   Speed, Spin, HP/s, the cap tune-ups' "max ..." words) use the tune-up's own "stat", "color" and "tip" in the data. */
+function tuneText(k){
+ const d=DATA.tuneUps[k]||{},s=TUNE[k].desc,st=d.stat;
+ if(!st||KW[st])return rich(s);
+ const m=new RegExp('((?:[+×-]\\s?)?\\d[\\d.]*%?\\s)?'+st.replace(/[.*+?^${}()|[\]\\/]/g,'\\$&')).exec(s);
+ if(!m)return rich(s);
+ return rich(s.slice(0,m.index))+`<b class="kw" style="color:${d.color||'inherit'}"${d.tip?` data-tip="${esc(d.tip)}"`:''}>${m[0]}</b>`+rich(s.slice(m.index+m[0].length));
+}
+/* Each tune-up box takes a faint hue of its stat's colour (data "color"): the pixel frame drawn for it by pixelFrames(), or a tinted background without pixel panels. */
+function tuneStyle(k){const c=(DATA.tuneUps[k]||{}).color;return c?` style="--tu:${c}${PXF['tu-'+k]?';border-image-source:var(--pf-tu-'+k+')':''}"`:''}
 /* Title screen: the rules and glossary on the left, New run and the weapons on the right. */
 function titleLeft(){return `<section class="card how"><h3>${TX.howTitle}</h3><p>${rich(TX.howBody)}</p><dl class="gloss">${Object.keys(KDEF).filter(k=>k[0]!=='_').map(k=>`<div><dt${KW[k]?' style="color:'+KW[k]+'"':''}>${k}</dt><dd>${tpl(KDEF[k])}</dd></div>`).join('')}</dl></section>`}
 function titlePanel(){
@@ -563,6 +604,7 @@ document.addEventListener('pointermove',e=>{
  if(!el)return;
  const r=el._box,fx=clamp((e.clientX-r.left)/r.width,0,1),fy=clamp((e.clientY-r.top)/r.height,0,1),px=fx-.5,py=fy-.5,m=TILT.maxDegrees*2;
  el.style.setProperty('--mx',Math.round(fx*r.width/3)*3+'px');el.style.setProperty('--my',Math.round(fy*r.height/3)*3+'px');   // snapped to the 3 px grid of the pixel-art frames
+ if(el.dataset.tilt==='flat'){el.style.transform=reduce?'':'translateY(-'+(TILT.flatLift||3)+'px)';return}   // shop tune-up and item boxes: lift by whole pixels only, no lean or scale, so pixel text stays sharp
  if(TILT.enabled&&!reduce)el.style.transform='perspective(800px) translateY(-'+TILT.lift+'px) rotateX('+(-py*m).toFixed(2)+'deg) rotateY('+(px*m*Math.min(1,r.height/r.width*2.5)).toFixed(2)+'deg) scale('+TILT.scale+')';
 });
 document.documentElement.addEventListener('pointerleave',()=>tiltOff());
@@ -928,7 +970,7 @@ function pxRing(set,x,y,r){const n=Math.max(8,Math.ceil(TAU*r/(PXL*.7)));for(let
 function pxDisc(set,x,y,r){const R_=Math.max(r,PXL*.5);for(let gy=Math.floor((y-R_)/PXL);gy<=Math.floor((y+R_)/PXL);gy++)for(let gx=Math.floor((x-R_)/PXL);gx<=Math.floor((x+R_)/PXL);gx++)if(Math.hypot((gx+.5)*PXL-x,(gy+.5)*PXL-y)<=R_)set.add(gx+','+gy)}
 function lightLayer(){if(!lpix){lpix=document.createElement('canvas');lpix.width=Math.ceil(AW/PXL);lpix.height=Math.ceil(AH/PXL);lpg=lpix.getContext('2d')}
  lpg.setTransform(1,0,0,1,0,0);lpg.clearRect(0,0,lpix.width,lpix.height);lpg.setTransform(1/PXL,0,0,1/PXL,0,0);return lpg}
-function mixHex(a,b,t){const h=x=>{x=String(x).replace('#','');return[0,2,4].map(i=>parseInt(x.substr(i,2),16))},A=h(a),B=h(b);return'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
+function mixHex(a,b,t){const h=x=>{x=String(x);const r=/rgba?\(([^)]+)\)/.exec(x);if(r)return r[1].split(',').slice(0,3).map(Number);x=x.replace('#','');return[0,2,4].map(i=>parseInt(x.substr(i,2),16))},A=h(a),B=h(b);return'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
 function shades(col){return SHADES[col]||(SHADES[col]={dark:mixHex(col,'#140a1e',.45),mid:mixHex(col,'#140a1e',.18),base:col,lit:mixHex(col,'#ffffff',.3),band:mixHex(col,'#ffffff',.55)})}
 let lightPt=null,lightAt={x:-AW*.4,y:-AH*.6};   // lightPt: where the mouse is, in arena units; lightAt eases toward it
 document.addEventListener('pointermove',e=>{if(e.pointerType==='touch'||!BL.mouseLight)return;const r=cv.getBoundingClientRect();if(!r.width)return;lightPt={x:(e.clientX-r.left)/r.width*AW,y:(e.clientY-r.top)/r.height*AH}});
