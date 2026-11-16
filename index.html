@@ -62,13 +62,17 @@
         return fail('game-data.json is not valid JSON',[e.message,where,'Usual causes: a missing or extra comma, a missing quote mark, or a missing bracket just before that spot.']);
       }
     }
-    return load('validate.js').then(function(){
+    /* Cache busting: every script and stylesheet is asked for with the data's build stamp (or version), so a browser never mixes new data with
+       old code after an update (game-data.json itself is always fetched fresh). */
+    var V='?v='+encodeURIComponent(String(data&&(data.build||data.version)||''));
+    Array.prototype.forEach.call(document.querySelectorAll('link[rel=stylesheet]'),function(l){l.href=l.getAttribute('href').split('?')[0]+V});
+    return load('validate.js'+V).then(function(){
       var p=validateGameData(data);
       if(p.length)return fail('game-data.json has '+p.length+(p.length===1?' problem':' problems'),p);
       window.GAME_DATA=data;
-      return load('core.js').then(function(){
+      return load('core.js'+V).then(function(){
         if(CORE_PROBLEMS.length)return fail('The data and the code do not match',CORE_PROBLEMS,'Remove those entries from game-data.json, or add their code to core.js.');
-        return load(location.hash==='#selftest'?'selftest.js':'ui.js');
+        return load((location.hash==='#selftest'?'selftest.js':'ui.js')+V);
       });
     });
   }
