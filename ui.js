@@ -281,6 +281,7 @@ document.addEventListener('click',e=>{
   case'restart-now':doRestart();return;
   case'adm-motion':G.forceMotion=!G.forceMotion;savePrefs();setMotion();render();return;
   case'adm-reset':if(run){run.override=null;applyAdmin();render()}return;
+  case'adm-add':adminAdd();return;
   case'adm-gold':if(run){run.gold+=50;run.admin=true;render()}return;
   case'adm-win':if(G.phase==='fight'&&G.S&&!G.S.done){run.admin=true;for(const q of G.S.balls)if(q.team===1)q.alive=false;G.S.done='win'}return;
   case'adm-impact':{const l=(IMPCFG.levels||[])[i],p=G.S&&G.S.player;if(l){audioOn();Impact.trigger({level:l,x:p?p.x:AW/2,y:p?p.y:AH/2},true);const n=$('#adm-note');if(n)n.textContent=impactNote()}return}
@@ -336,7 +337,7 @@ function augList(run,mode){
 function readoutHtml(){const S=G.S,L=G.phase==='fight'&&S&&!S.preview&&S.last;
  return `<div class="readout${G.phase==='fight'?'':' idle'}" id="readout" aria-live="off"><div class="ro pw"><small>${TX.readoutPower}</small><b id="roP">${L?num(L.p):'–'}</b></div><i>×</i><div class="ro ml"><small>${TX.readoutMult}</small><b id="roM">${L?'×'+num(L.m):'–'}</b></div><div class="ro dm"><small>${TX.readoutLast}</small><b id="roD">${L?fmt(L.d)+(L.c?'!':''):'–'}</b></div></div>`}
 /* A stat's cap, shown after its value ("/760", or "no cap" after a cap Legendary). */
-function capTxt(run,k){const u=run.uncap&&run.uncap[k],c=capOf(run,k);return `<i class="cap">${u?(TX.noCap||'no cap'):'/'+c+(k==='armor'?'%':'')}</i>`}   // no hint (owner's call)
+function capTxt(run,k){const u=uncapped(run,k),c=capOf(run,k);return `<i class="cap">${u?(TX.noCap||'no cap'):'/'+c+(k==='armor'?'%':'')}</i>`}   // no hint (owner's call)
 const NX=()=>TX.statNamesExtra||{};
 /* Tag counts (shown while you own Specialist or Tag Team): how many of your augments carry each tag; the most common is highlighted. */
 function tagTracker(run){if(!run.augs.some(a=>a.id==='specialist'||a.id==='tagteam'))return'';const n={};for(const a of run.augs){const d=AUG[a.id];if(d)for(const g of d.tags)n[g]=(n[g]||0)+1}
@@ -370,7 +371,7 @@ function nextCard(run,mode){
  if(b)h+=`<h2>${b.name}</h2><p class="rule">${rich(b.rule)}</p>${bossNotes(b)}${enc.list.length?`<p class="with">${TX.bossBrings} ${encSummary(enc)}.</p>`:''}`;
  else h+=`<h2>${encSummary(enc)}</h2>${encNotes(enc)}`;
  h+=nextBosses(run);
- if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc((TX.consumableTag||'Consumable')+': '+d.desc+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
+ if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc((TX.consumableTag||'Consumable')+': '+d.desc+(itemTip(run,x.id)?' '+itemTip(run,x.id):'')+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
  if(shop)h+=pk!=null?`<button class="go back" data-act="peek" data-i="${run.stage}" data-primary>${TX.jumpToCurrent||'Jump to current'}</button>`:`<button class="go" data-act="fight" data-primary>${TX.fightButton}</button>`;
  return h+'</section>';
 }
@@ -385,11 +386,16 @@ function shopCard(run){
   h+=`<div class="tune${tu.sold?' sold':''}${d.cap?' cap':''}" data-tilt="flat"${tuneStyle(tu.k)}><i class="tu-fx" aria-hidden="true"></i>${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${tuneText(tu.k)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
  h+='</div>';
  if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=CONS.bagSize;h+=`<div class="tunes items">`;
-  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}" data-tilt="flat"><i class="tu-fx" aria-hidden="true"></i>${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
+  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}" data-tilt="flat"><i class="tu-fx" aria-hidden="true"></i>${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span${itemTip(run,o.id)?` data-tip="${esc(itemTip(run,o.id))}"`:''}>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
  const int=Math.min(run.intCap,Math.floor(run.gold/E.interestPerGold));
  h+=`<div class="shop-f"><span class="interest">${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
  return h;
 }
+/* Item hints for your current weapon (shop and bag): Ramp Oil shows your Ramp with it, Twin Kit how many weapons you would carry. */
+function itemTip(run,id){const d=ITEM[id];if(!d||!run)return'';const W=WEAPONS[run.weapon];
+ if(id==='rampoil')return tpl(TX.itemRampTip||'Your {weapon}: {ramp}.',{weapon:W.name,ramp:rampWith(W,d.v)});
+ if(id==='twinkit'){const P=calcPlayer(run,null);return tpl(TX.itemWeaponsTip||'Weapons: {now} → {then}.',{now:P.blades,then:Math.min((RULES.uncapped||{}).blades||16,P.blades*(d.v.mult||2))})}
+ return''}
 /* Tune-up text: the stat word gets its colour and a hover hint. Glossary keywords (Power, Crit...) already get both from rich(); the rest (Max HP,
    Speed, Spin, HP/s, the cap tune-ups' "max ..." words) use the tune-up's own "stat", "color" and "tip" in the data. */
 function tuneText(k){
@@ -471,9 +477,21 @@ function breakdown(S,run){
  const LG=(S.P&&S.P.log)||{},X=NX(),SN=TX.statNames;
  const statName={hp:SN.hp,pow:SN.power,mult:SN.mult,crit:SN.crit,critMult:X.critMult||'Crit multiplier',spd:SN.speed,spin:SN.spin,reach:SN.reach,armor:SN.armor,regen:SN.regen,kb:SN.knock||'Knockback',impact:SN.impact||'Impact',blades:X.blades||'Blades',size:X.size||'Size',projExtra:X.volley||'Volley',projBounce:X.projBounce||'Projectile bounces',bounceX:X.bounceX||'Bounce count',rampX:SN.ramp||TX.rampLabel||'Ramp',poisonX:X.poisonX||'Poison damage',burnX:X.burnX||'Burn damage',frozenX:X.frozenX||'Damage to Frozen'};
  const sv=(k,v)=>k==='crit'?(v>0?'+':'')+Math.round(v*100)+'%':k==='regen'?(v>0?'+':'')+num(v)+'/s':(v>0?'+':'')+num(v);
- const statLines=Object.keys(LG).map(id=>{const L=LG[id],parts=[];for(const k in L){const v=L[k];if(k.startsWith('inc.')){const s=k.slice(4);parts.push((v>0?'+':'')+Math.round(v*100)+'% '+(statName[s]||s))}else if(k.startsWith('more.')){const s=k.slice(5);parts.push('×'+num(v)+' '+(statName[s]||s))}else parts.push(sv(k,v)+' '+(statName[k]||k))}
-  const d=AUG[id]||TROPHY[id]||ITEM[id];return parts.length?`<li><span>${d?d.name:id}</span><b class="st">${parts.join(', ')}</b></li>`:''}).join('');   // what each source added to your stats this fight
- const seen=new Set(keys.map(idOf).concat(Object.keys(LG))),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
+ const HS=S.hitStat||{},DS=S.dynStat||{},NH=S.hookHits||0,dsName={pow:SN.power,mult:SN.mult,crit:SN.crit,spd:SN.speed,reach:SN.reach,armor:SN.armor,regen:SN.regen};
+ const srcText=id=>{const d=DATA.augments[id]||DATA.trophies[id]||(DATA.consumables||{})[id];return d&&d.text||''};
+ const isX=id=>/×(\{|\d|Mult)/.test(srcText(id));   // a ×Mult source shows its factor; a +Mult source shows what it added
+ const dv=(k,v)=>k==='crit'||k==='spd'?(v>0?'+':'')+Math.round(v*100)+'%':k==='regen'?(v>0?'+':'')+num(v)+'/s':(v>0?'+':'')+num(v);
+ /* One line per source: what it added at fight start (P.log), what it added to the hits it touched (per hit, on n of all hits), and what it gained
+    during the fight (dynStat: "gained", or "up to" when it went back down, like Adrenaline). */
+ const order=[...new Set(run.augs.map(a=>a.id).concat(Object.keys(LG),Object.keys(HS),Object.keys(DS)))];
+ const statLines=order.map(id=>{const L=LG[id]||{},parts=[];for(const k in L){const v=L[k];if(k.startsWith('inc.')){const s=k.slice(4);parts.push((v>0?'+':'')+Math.round(v*100)+'% '+(statName[s]||s))}else if(k.startsWith('more.')){const s=k.slice(5);parts.push('×'+num(v)+' '+(statName[s]||s))}else parts.push(sv(k,v)+' '+(statName[k]||k))}
+  const h=HS[id];if(h&&h.n){const on=tpl(TX.statsOnHits||'on {n}/{all} hits',{n:h.n,all:Math.max(NH,h.n)});
+   if(Math.abs(h.dp)>1e-9)parts.push(tpl(TX.statsPerHit||'{v} {stat} per hit',{v:dv('pow',h.dp/h.n),stat:SN.power})+(h.dpMax>h.dp/h.n*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:dv('pow',h.dpMax)}):'')+' '+on);
+   if(Math.abs(h.dm)>1e-9)parts.push((isX(id)?tpl(TX.statsPerHit||'{v} {stat} per hit',{v:'×'+num(Math.exp(h.lr/h.n)),stat:SN.mult})+(h.rMax>Math.exp(h.lr/h.n)*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:'×'+num(h.rMax)}):'')
+    :tpl(TX.statsPerHit||'{v} {stat} per hit',{v:dv('mult',h.dm/h.n),stat:SN.mult})+(h.dmMax>h.dm/h.n*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:dv('mult',h.dmMax)}):''))+' '+on)}
+  const D=DS[id];if(D)for(const k in D){const q=D[k];if(q.peak<1e-6)continue;parts.push(q.tot<q.peak-1e-6?tpl(TX.statsUpTo||'up to {v} {stat}',{v:dv(k,q.peak),stat:dsName[k]||k}):tpl(TX.statsGained||'gained {v} {stat}',{v:dv(k,q.tot),stat:dsName[k]||k}))}
+  const d=AUG[id]||TROPHY[id]||ITEM[id];return parts.length?`<li><span>${d?d.name:id}</span><b class="st">${parts.join('<br>')}</b></li>`:''}).join('');   // what each source added to your stats this fight
+ const seen=new Set(keys.map(idOf).concat(Object.keys(LG),Object.keys(HS),Object.keys(DS))),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
  return`<details class="bd" id="bd"${G.bdOpen!==false?' open':''}><summary>${TX.breakdownTitle||'Damage breakdown'} <b>${fmt(total)}</b></summary>
   <h4>${TX.breakdownDealt||'Dealt by'}</h4><ul class="pay">${rows(dealt,false)}</ul>
   ${added.length?`<h4 data-tip="${esc(TX.breakdownAddedTip||'')}">${TX.breakdownAdded||'Added by'}</h4><ul class="pay">${rows(added,true)}</ul>`:''}
@@ -781,7 +799,8 @@ function adminCard(run){
  const base=calcPlayer(Object.assign({},run,{override:null}),null),o=run.override||{};
  let h=`<section class="card admin"><h3>Admin <span>a value here replaces that stat · best run is not recorded</span></h3><div class="adm-grid">`;
  for(const[k,label,m]of ADM)h+=`<label for="adm-${k}">${label}<input id="adm-${k}" data-adm="${k}" type="number" step="any" inputmode="decimal" placeholder="${r2(base[k]*m)}" value="${o[k]!=null?r2(o[k]*m):''}"></label>`;
- h+=`</div><div class="adm-row"><button data-act="adm-reset">Clear</button><button data-act="adm-gold">+$50</button>${G.phase==='fight'?'<button data-act="adm-win">Win fight</button>':''}</div>`;
+ h+=`</div><div class="adm-row"><label for="adm-aug">Add augment</label><input id="adm-aug" list="adm-auglist" placeholder="Type a name" autocomplete="off"><datalist id="adm-auglist">${Object.keys(AUG).sort((a,b)=>AUG[a].rar-AUG[b].rar||AUG[a].name.localeCompare(AUG[b].name)).map(id=>`<option value="${esc(AUG[id].name)}">${RAR[AUG[id].rar]}</option>`).join('')}</datalist><button data-act="adm-add">Add</button><span id="adm-addnote"></span></div>`;
+ h+=`<div class="adm-row"><button data-act="adm-reset">Clear</button><button data-act="adm-gold">+$50</button>${G.phase==='fight'?'<button data-act="adm-win">Win fight</button>':''}</div>`;
  const lv=IMPCFG.levels||[];
  if(lv.length)h+=`<div class="adm-row"><span>Impact frame</span>${lv.map((l,i)=>`<button data-act="adm-impact" data-i="${i}">${l.name||'Level '+(i+1)}</button>`).join('')}</div>`;
  if(sysReduce)h+=`<div class="adm-row"><span>Reduced motion is on for this device</span><button data-act="adm-motion" aria-pressed="${!!G.forceMotion}">${G.forceMotion?'Playing effects anyway':'Play effects anyway'}</button></div>`;
@@ -799,6 +818,17 @@ function impactNote(){
  const L=Impact.last;if(L)bits.push(L.ok?'Last: played '+L.why+'.':'Last: skipped, '+L.why+'.');
  return bits.join(' ')||'Ready. Real hits flash at 50% or more of the strongest enemy.'.replace('50',''+Math.min.apply(null,(IMPCFG.levels||[{minPercentOfMaxHp:50}]).map(l=>l.minPercentOfMaxHp)));
 }
+/* Admin: adds the augment typed in the Add augment box to your sockets (a socket is added if they are full). Works in the shop and mid-fight. */
+function adminAdd(){
+ const run=G.run,inp=$('#adm-aug');if(!run||!inp)return;const q=inp.value.trim().toLowerCase();if(!q)return;
+ const id=Object.keys(AUG).find(k=>AUG[k].name.toLowerCase()===q||k===q)||Object.keys(AUG).find(k=>AUG[k].name.toLowerCase().startsWith(q));
+ const note=$('#adm-addnote');if(!id){if(note)note.textContent='No augment called "'+inp.value+'"';play('deny');return}
+ if(run.augs.length>=run.slots)run.slots=run.augs.length+1;
+ run.augs.push({id,n:0,f:{}});run.admin=true;audioOn();play('coin');
+ if(G.phase==='fight'&&G.S&&!G.S.done)applyAdmin();else if(G.phase==='prep')previewFight();
+ render();const i2=$('#adm-aug');if(i2)i2.focus({preventScroll:true});const n2=$('#adm-addnote');if(n2)n2.textContent='Added '+AUG[id].name;
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='adm-aug'){e.preventDefault();adminAdd()}});
 /* Applies changed overrides to whatever is on screen: the running fight, or the warm-up preview. */
 function applyAdmin(){
  const run=G.run,S=G.S;if(!run||!S)return;run.admin=true;
@@ -1075,6 +1105,7 @@ function drawTop(b,S){
  }
  if(b.poison>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.poisonRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.2,S.t*2,S.t*2+Math.min(TAU,.6+b.poison*.12));ctx.stroke()}
  if(b.burn>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.burnRing;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5.8,-S.t*3,-S.t*3+Math.min(TAU,.6+b.burn*.25));ctx.stroke()}
+ if(b.shock>0){ctx.lineWidth=2;ctx.strokeStyle=TH.effects.shock||'#8fe3ff';ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+11,Math.PI/2,Math.PI/2+TAU*Math.min(1,b.shock/((RULES.status&&RULES.status.shockMax)||10)));ctx.stroke();ctx.setLineDash([])}   // Shock: a dashed ring filling toward its max
  if(b.chill>0){const CM=(RULES.status&&RULES.status.chillMax)||10;ctx.lineWidth=2;ctx.strokeStyle=TH.effects.chill||'#a8e6ff';ctx.beginPath();ctx.arc(b.x,b.y,b.r+8.4,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,b.chill/CM));ctx.stroke()}   // Chill: fills toward Freeze
  if(b.frozen>0){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fillStyle=rgba(TH.effects.freeze||'#d9f4ff',.5);ctx.fill();ctx.lineWidth=2.2;ctx.strokeStyle=TH.effects.freeze||'#d9f4ff';ctx.stroke()}   // Frozen: an icy shell
  drawBallMarks(b,S);

@@ -376,3 +376,11 @@ html.pxui .tunes.items .tune{background:none}
 html.pxui .tune .buy{height:36px;box-sizing:border-box;padding:0 3px 6px;border-style:solid;border-width:0 15px;border-radius:0;box-shadow:none;background:none;
   border-image-source:var(--pb-pill);border-image-slice:0 15 0 15 fill;border-image-repeat:stretch;image-rendering:pixelated;line-height:30px;transition:none}
 html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border-image-source:var(--pb-pill-down);padding:6px 3px 0}
+/* Stats added in the damage breakdown: the source's name on its own line, what it added underneath (fight start, per hit, gained in the fight) */
+.bd .statlist li{flex-direction:column;align-items:flex-start;gap:0;padding:2px 4px}
+.bd .statlist .st{text-align:left;padding-left:12px;color:var(--pow);font-family:var(--body)}
+/* admin: Add augment box */
+.adm-row label{font-weight:700;text-transform:uppercase;color:var(--dim)}
+.adm-row input{font:inherit;font-size:var(--bfs,13.333px);color:var(--chalk);background:var(--ink);border:2px solid var(--drop);border-radius:8px;padding:4px 7px;min-width:0;flex:1 1 140px}
+.adm-row input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+#adm-addnote{color:var(--gold)}
