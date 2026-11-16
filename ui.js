@@ -106,7 +106,7 @@ function pixelFrames(){
  for(const k of Object.keys(DATA.tuneUps)){const c=k[0]!=='_'&&DATA.tuneUps[k]&&DATA.tuneUps[k].color;if(c){set('tu-'+k,{fill:mixHex(P.panel2,c,TH.tuneHue==null?.14:TH.tuneHue),pad:1});PXF['tu-'+k]=1}}   // a faint hue per stat (theme.tuneHue, default 0.14)
  pixelButtons();
 }
-function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin;G.statsOpen=p.statsOpen!==false;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('ricochet-rogue')||'{}');G.muted=!!p.muted;G.speed=[1,2,4,8].includes(p.speed)?p.speed:1;G.best=p.best||0;G.admin=!!p.admin&&!(DATA.admin&&DATA.admin.showToggle===false);G.statsOpen=p.statsOpen!==false;G.forceMotion=!!p.forceMotion;G.bdOpen=p.bdOpen!==false;if(p.light==='simple'||p.light==='full'){G.lightChosen=true;lightMode=p.light}}catch(e){}setMotion()}
 function savePrefs(){try{localStorage.setItem('ricochet-rogue',JSON.stringify({muted:G.muted,speed:G.speed,best:G.best,admin:G.admin,statsOpen:G.statsOpen,forceMotion:!!G.forceMotion,bdOpen:G.bdOpen!==false,light:G.lightChosen?lightMode:undefined}))}catch(e){}}
 
 /* Font files (assets.fonts.display and .body), registered under the family names in theme.fonts. Optional font descriptors per role come from
@@ -275,7 +275,7 @@ document.addEventListener('click',e=>{
   case'light':lightMode=lightMode==='full'?'simple':'full';G.lightChosen=true;flashes=[];savePrefs();renderCtl();return;
   case'mute':G.muted=!G.muted;if(!G.muted)audioOn();else syncMusic();savePrefs();renderCtl();return;
   case'stats':{G.statsOpen=!G.statsOpen;savePrefs();const f=$('#livestats');if(f)f.classList.toggle('open',G.statsOpen);b.setAttribute('aria-expanded',G.statsOpen);return}
-  case'admin':G.admin=!G.admin;savePrefs();render();return;
+  case'admin':if(DATA.admin&&DATA.admin.showToggle===false)return;G.admin=!G.admin;savePrefs();render();return;
   case'restart':if(!run)return;if(G.restartArmed){doRestart();return}
    G.restartArmed=true;renderCtl();clearTimeout(G.restartTimer);G.restartTimer=setTimeout(()=>{G.restartArmed=false;renderCtl()},2600);return;
   case'restart-now':doRestart();return;

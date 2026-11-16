@@ -105,7 +105,7 @@
 
   "admin": {
     "_note": "showToggle puts an Admin button in the header. Admin mode adds a panel for overriding the player's stats and triggering impact frames. Set it to false before sharing the game.",
-    "showToggle": true
+    "showToggle": false
   },
 
   "_raritiesNote": "Rarities in order, lowest first. 'color' tints the augment's name and glow. 'metal' is the card body: three colors for the highlight, the main tone and the shadow of the metal. The fourth rarity always glows and the fifth also gets a sweeping shine (cards.css, classes c3 and c4).",
