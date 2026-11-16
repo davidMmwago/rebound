@@ -214,3 +214,13 @@ body.drag-active{cursor:grabbing} body.drag-active .aug[data-drag]{cursor:grabbi
 html.pxui .acard .buy{width:57px;height:63px;padding:0 0 6px;border:0;border-radius:0;box-shadow:none;transition:none;
   background:var(--pb-coin) 0 0/57px 63px no-repeat;image-rendering:pixelated;gap:0}
 html.pxui .acard .buy:active:not(:disabled){transform:none;box-shadow:none;background-image:var(--pb-coin-down);padding:6px 0 0}
+
+/* ===== Void augments (rarity with "void": true): the Epic frame turned almost black, with a purple glow (obsidian) ===== */
+.c5{--rc:var(--c5);--ma:var(--m5a);--mb:var(--m5b);--mc:var(--m5c)}
+.framed.c5 .ac-frame{filter:brightness(.26) saturate(1.8) drop-shadow(0 0 5px #9b5cff) drop-shadow(0 3px 0 var(--drop))}
+.framed.c5.tilting .ac-frame{filter:brightness(.32) saturate(1.8) drop-shadow(0 0 9px #b07cff) drop-shadow(0 6px 0 var(--drop)) drop-shadow(0 12px 9px #00000070)}
+.c5::before{opacity:.65;box-shadow:0 0 16px 3px #8a4dff}
+.c5.tilting::before{opacity:1}
+.framed.c5 .ac-fx::before{content:"";position:absolute;inset:0 0 -72px -72px;opacity:.5;mix-blend-mode:screen;
+  background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAY0lEQVR42mNgGAX0BB/u/L9DUNH/D//raeaC/x/+1///8P8/zS0ZjezBC15f+r9gNBRIBs9O4E/WTLR2AAsVXN7w7MR/BgYGBgYpC8bG4RdEgwP8////2cjLH3f2/T8xPHwCAD1KLXbqxMdVAAAAAElFTkSuQmCC) 0 0/72px 72px;image-rendering:pixelated;filter:hue-rotate(-20deg)}
+.framed.c5.tilting .ac-fx::before{animation:acSparkPx 6s steps(24) infinite}

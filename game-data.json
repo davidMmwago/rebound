@@ -8,7 +8,7 @@
     "You can delete a whole augment, enemy or boss to remove it from the game. Adding a new enemy or boss works from this file alone. Adding a new augment or trophy also needs code.",
     "Keys that start with an underscore are notes for humans and are ignored by the game."
   ],
-  "build": "20261116153004", "version": 10,
+  "build": "20261116210832", "version": 18,
 
   "rules": {
     "_note": "Distances are in arena units (the arena is 'arena.size' units wide). Speeds are units per second. Spin is radians per second (6.28 is one full turn a second).",
@@ -114,13 +114,14 @@
     "showToggle": false
   },
 
-  "_raritiesNote": "Rarities in order, lowest first. 'color' tints the augment's name and glow. 'metal' is the card body: three colors for the highlight, the main tone and the shadow of the metal. The fourth rarity always glows and the fifth also gets a sweeping shine (cards.css, classes c3 and c4).",
+  "_raritiesNote": "Rarities in order, lowest first. The rarity with \"void\": true is for Void augments: never in the shop, only from the Night Market (Crystal Ball item); they take no socket and cannot be sold. 'color' tints the augment's name and glow. 'metal' is the card body: three colors for the highlight, the main tone and the shadow of the metal. The fourth rarity always glows and the fifth also gets a sweeping shine (cards.css, classes c3 and c4).",
   "rarities": [
     { "name": "Common", "cost": 4, "shopWeight": 58, "shopWeightPerTier": 0, "color": "#d3d7e0", "metal": ["#f4f6fa", "#a7adbb", "#5d6474"] },
     { "name": "Uncommon", "cost": 6, "shopWeight": 30, "shopWeightPerTier": 0, "color": "#8ee7f3", "metal": ["#e4fcff", "#72cddd", "#2c8092"] },
     { "name": "Rare", "cost": 8, "shopWeight": 9, "shopWeightPerTier": 1, "color": "#ffa78e", "metal": ["#ffe2d6", "#ea8466", "#994834"] },
     { "name": "Epic", "cost": 10, "shopWeight": 3, "shopWeightPerTier": 0.75, "color": "#c6a0ff", "metal": ["#ecdcff", "#9869ee", "#4f2e98"] },
-    { "name": "Legendary", "cost": 12, "shopWeight": 1.5, "shopWeightPerTier": 0.5, "color": "#ffd34d", "metal": ["#fff4bc", "#efb828", "#96670a"] }
+    { "name": "Legendary", "cost": 12, "shopWeight": 1.5, "shopWeightPerTier": 0.5, "color": "#ffd34d", "metal": ["#fff4bc", "#efb828", "#96670a"] },
+    { "name": "Void", "cost": 0, "shopWeight": 0, "shopWeightPerTier": 0, "color": "#c39bff", "metal": ["#4a3a66", "#1a1226", "#08050e"], "void": true }
   ],
 
   "weaponTypes": {
@@ -162,7 +163,7 @@
     },
     "fists": {
       "name": "Bare Fists", "blurb": "Body hits scale with Speed.",
-      "fists": true, "power": 9, "reach": 0, "spin": 0, "speed": 240, "blades": 0, "impact": 180,
+      "fists": true, "power": 9, "reach": 0, "spin": 0, "speed": 240, "blades": 0, "impact": 180, "knockback": 180,
       "rampText": "+{speedPercentPerBounce}% Speed per bounce",
       "ramp": { "speedPercentPerBounce": 3, "maxSpeedBonusPercent": 180 }
     }
@@ -273,6 +274,19 @@
       "text": "Every {interval}s: Shock the nearest enemy for {powerPercent}% Power.",
       "values": { "interval": 1.5, "powerPercent": 80 } },
 
+    "forged": { "name": "Tempered Plate", "rarity": "Uncommon", "tags": ["body", "scale"],
+      "text": "Fight won: +{armor} Armor. Lasts the run.",
+      "values": { "armor": 0.75 } },
+    "stoneheart": { "name": "Stone Heart", "rarity": "Rare", "tags": ["body"],
+      "text": "+1 Armor per {hpPer} Max HP. Counts augments above.",
+      "values": { "hpPer": 25 } },
+    "ironclad": { "name": "Ironclad", "rarity": "Rare", "tags": ["body", "scale"],
+      "text": "+{power} Power per Armor. Counts augments above.",
+      "values": { "power": 1 } },
+    "bastion": { "name": "Bastion", "rarity": "Common", "tags": ["body", "scale"],
+      "_note": "Each hit your ball takes that the Armor cap limits (Armor would block more than the cap allows): +power Power for the rest of the fight, up to max hits.",
+      "text": "Each hit taken at the Armor Cap: +{power} Power this fight. Max +{maxPower}.",
+      "values": { "power": 2, "max": 30, "maxPower": 60 } },
     "iron": { "name": "Iron Skin", "rarity": "Common", "tags": ["body"],
       "text": "+{armor} Armor.",
       "values": { "armor": 3 } },
@@ -538,6 +552,10 @@
       "_note": "A projectile that kills an enemy flies on to the nearest one with percent% more damage, up to max links. showAt: chain length from which 'Chain ×n' shows. heavyAt and massiveAt: chain lengths that play the two impact frame levels. The card keeps the run's longest chain.",
       "text": "Projectile kills: it flies on to the nearest enemy with +{percent}% damage. Chains.",
       "values": { "percent": 100, "max": 12, "showAt": 2, "heavyAt": 4, "massiveAt": 6 } },
+    "seep": { "name": "Seeping Wounds", "rarity": "Legendary", "tags": ["poison", "burn"],
+      "_note": "Poison and Burn ticks are multiplied by your current Mult on that enemy (what a hit on it would get, crits aside). percent: how much of the Mult above ×1 counts (100 = all of it).",
+      "text": "Poison and Burn ticks are multiplied by your Mult.",
+      "values": { "percent": 100 } },
     "catalyst": { "name": "Catalyst", "rarity": "Legendary", "tags": ["poison", "burn"],
       "text": "Poison and Burn deal ×{mult} damage. ×{bothMult} with both.",
       "values": { "mult": 2, "bothMult": 3 } },
@@ -545,6 +563,30 @@
       "_note": "Counts the statuses your side has applied this fight: Burn, Chill (or Freeze), Poison, Shock. per: ×Mult added for each, so all four = ×5.",
       "text": "+{per} ×Mult for each Status you've applied this fight.",
       "values": { "per": 1 } },
+    "retrib": { "name": "Retribution", "rarity": "Legendary", "tags": ["body", "wild"],
+      "_note": "When an enemy hits your ball, the damage your Armor blocked (the hit before Armor minus what you took) is dealt back to that enemy, times percent and your Mult on it (what a hit on it would get, crits aside). Its Armor still applies.",
+      "text": "Damage your Armor blocks is reflected to the attacker at {percent}%, multiplied by your Mult.",
+      "values": { "percent": 150 } },
+    "vhands": { "name": "Empty Hands", "rarity": "Void", "tags": ["contact", "wild"],
+      "_note": "No weapon (Bare Fists: no body-hit damage) and no On hit effects, except on slams: an enemy you knocked that hits a wall or another enemy within window seconds takes percent% Power × Mult as a hit with On hit effects (each enemy once per cooldown). Contacts push with Impact + Knockback.",
+      "text": "No weapon and no On hit effects. +{impact} Impact. Enemies you knock into walls or each other take {percent}% Power, with On hit effects.",
+      "values": { "impact": 300, "percent": 85, "window": 0.8, "cooldown": 0.3 } },
+    "vglut": { "name": "Gluttony", "rarity": "Void", "tags": ["body", "scale"],
+      "_note": "Kills over the run grow you: +size% Size and -speed% Speed each, up to sizeMax and speedMax. Max HP cut to hpPercent. ×Mult +mult for every 10% Size above normal, from any source.",
+      "text": "Max HP cut to {hpPercent}%. On kill: +{size}% Size, -{speed}% Speed, up to +{sizeMax}% and -{speedMax}%. ×Mult +{mult} per 10% Size above normal.",
+      "values": { "hpPercent": 70, "size": 2, "speed": 1.5, "sizeMax": 60, "speedMax": 40, "mult": 0.4 } },
+    "vgold": { "name": "Cursed Gold", "rarity": "Void", "tags": ["gold", "wild"],
+      "text": "Fight payouts -{cut}%. ×Mult +{per} per $1 held.",
+      "values": { "cut": 50, "per": 0.03 } },
+    "vpull": { "name": "Event Horizon", "rarity": "Void", "tags": ["contact", "wild"],
+      "text": "Enemies are pulled toward you all fight. ×{mult} Mult.",
+      "values": { "pull": 260, "mult": 2 } },
+    "vecho": { "name": "Echoing Void", "rarity": "Void", "tags": ["wild"],
+      "text": "Sockets {cut}+ are switched off. Sockets 1 to {keep} trigger {times} times.",
+      "values": { "keep": 3, "cut": 4, "times": 3 } },
+    "vbleed": { "name": "Bleeding Edge", "rarity": "Void", "tags": ["body", "scale"],
+      "text": "Lose {drain}% Max HP per second. Each hit this fight: +{mult} ×Mult.",
+      "values": { "drain": 1, "mult": 0.05 } },
     "mass": { "name": "Critical Mass", "rarity": "Legendary", "tags": ["crit"],
       "text": "+{percent}% Crit per hit this fight. Crit above 100% adds Crit damage.",
       "values": { "percent": 1, "critMultPerOverflow": 2 } }
@@ -554,6 +596,9 @@
     "_note": "One-fight items. Bought in the shop into your bag, switched on before a fight with a click, used up when that fight starts. Right-click one in the bag to sell it for half. needs: \"blade\" means Bare Fists are never offered it. Adding an item also needs code (core.js ITEM_CODE).",
     "padlock": { "name": "Padlock", "cost": 4, "text": "Your sockets can't be switched off or eaten.", "values": {} },
     "tonic": { "name": "Power Tonic", "cost": 3, "text": "+{percent}% Power.", "values": { "percent": 50 } },
+    "crystal": { "name": "Crystal Ball", "cost": 5, "weight": 0.35, "text": "Click in your bag: opens the Night Market. Choose 1 of {offers} Void augments.", "values": { "offers": 4 } },
+    "growth": { "name": "Growth Draught", "cost": 3, "text": "+{percent}% Size.", "values": { "percent": 30 } },
+    "stoneskin": { "name": "Stoneskin", "cost": 3, "text": "+{percent}% Armor.", "values": { "percent": 50 } },
     "draught": { "name": "Iron Draught", "cost": 3, "text": "+{percent}% Max HP.", "values": { "percent": 50 } },
     "quickstep": { "name": "Quickstep", "cost": 2, "text": "+{percent}% Speed.", "values": { "percent": 30 } },
     "aegis": { "name": "Aegis Potion", "cost": 4, "text": "Below {hpPercent}% HP: immune for {seconds}s. Once.", "values": { "hpPercent": 30, "seconds": 4 } },
@@ -574,13 +619,14 @@
     "spd": { "name": "Wax", "text": "+{amount}% Speed", "amount": 8, "stat": "Speed", "color": "#8fd3ff", "tip": "How fast your ball moves." },
     "spin": { "name": "Grease", "text": "+{amount}% Spin", "amount": 10, "needs": "blade", "stat": "Spin", "color": "#c6a6ff", "tip": "How fast your blade turns. On the Bow: fire rate." },
     "reach": { "name": "Extension", "text": "+{amount}% Reach", "amount": 10, "needs": "blade", "stat": "Reach", "color": "#a6e3b8" },
-    "armor": { "name": "Plating", "text": "+{amount} Armor", "amount": 1, "stat": "Armor", "color": "#c9bfdc" },
+    "armor": { "name": "Plating", "text": "+{amount} Armor", "amount": 2, "stat": "Armor", "color": "#c9bfdc" },
     "crit": { "name": "Polish", "text": "+{amount}% Crit", "amount": 5, "stat": "Crit", "color": "#ffd23f" },
     "regen": { "name": "Patch Kit", "text": "+{amount} HP/s", "amount": 1, "stat": "HP/s", "color": "#9ff0a0", "tip": "Max HP your ball regains every second." },
-    "knock": { "name": "Counterweight", "text": "+{amount}% Knockback", "amount": 15, "needs": "blade", "stat": "Knockback", "color": "#ffcf8a" },
+    "knock": { "name": "Counterweight", "text": "+{amount}% Knockback", "amount": 15, "stat": "Knockback", "color": "#ffcf8a" },
     "impact": { "name": "Bumper Pads", "text": "+{amount} Impact", "amount": 40, "stat": "Impact", "color": "#ffb88a" },
     "mini": { "name": "Hatchling", "text": "+{amount} Mini at fight start", "amount": 1, "stat": "Mini", "color": "#ffe9a3" },
     "blade": { "name": "Spare Blade", "text": "+{amount} weapon", "amount": 1, "cost": 10, "costStep": 8, "weight": 0.3, "needs": "blade", "stat": "weapon", "color": "#e8edf2", "tip": "Another copy of your weapon on your ball. Blades has a cap." },
+    "size": { "name": "Bulk", "text": "+{amount}% Size", "amount": 10, "cost": 4, "weight": 0.6, "stat": "Size", "color": "#d6b38a", "tip": "How big your ball is. Bigger balls are harder to push and easier to hit." },
     "capspd": { "name": "Tailwind", "text": "+{amount} max Speed", "amount": 60, "cap": "spd", "cost": 5, "weight": 0.5, "stat": "max Speed", "color": "#8fd3ff", "tip": "Raises the Speed cap: the most your Speed can be. Past a cap the extra is overflow." },
     "capspin": { "name": "Ball Bearing", "text": "+{amount} max Spin", "amount": 3, "cap": "spin", "cost": 5, "weight": 0.5, "needs": "blade", "stat": "max Spin", "color": "#c6a6ff", "tip": "Raises the Spin cap: the most your Spin can be. Past a cap the extra is overflow." },
     "capblades": { "name": "Weapon Rack", "text": "+{amount} max Blades", "amount": 1, "cap": "blades", "cost": 6, "weight": 0.4, "needs": "blade", "stat": "max Blades", "color": "#dfe4ee", "tip": "Raises the blade cap: the most blades you can carry. Past a cap the extra is overflow." },
@@ -739,7 +785,7 @@
     "ateText": "{by} ate {name}", "chainStreak": "Chain ×{n}", "miniYous": "Mini-Yous: {n}", "questProgress": "Quest: {n}/{need}", "questDone": "Quest complete", "armorLeft": "Armor {n}", "copying": "Copying {name}", "magnetPush": "Pushing", "magnetPull": "Pulling", "nullSocket": "Socket {n} off", "queenFrenzy": "Frenzy", "stormPairs": "Double strikes", "resisting": "Resists {type}", "payElite": "Elite defeated",
     "damageTypes": { "hit": "Hits", "effect": "Effects", "poison": "Poison", "burn": "Burn" },
     "eliteNames": { "armored": "Armored", "swift": "Swift", "vampiric": "Vampiric", "volatile": "Volatile", "warded": "Warded" },
-    "eliteLine": "Elite: {mod} {name}", "bagTitle": "Items {n}/{max}", "bagHint": "Single Use: click to activate at the start of the next fight.", "bagFull": "Bag full", "padlocked": "Padlocked", "lightFull": "Lighting: Full", "lightSimple": "Lighting: Simple", "lightAutoSimple": "Frames were slow, so lighting switched to Simple. Change it with the Lighting button.", "itemSellTip": "Right-click: sell for ${gold}", "phase2Label": "At 50%:", "weakTo": "Weak to", "resistsLabel": "Resists", "nextBosses": "Coming up", "tierShort": "T{tier}", "miniWord": "Minis", "active": "On", "full": "Full", "itemRampTip": "Your {weapon}: {ramp}.", "itemWeaponsTip": "Weapons: {now} → {then}.",
+    "eliteLine": "Elite: {mod} {name}", "bagTitle": "Items {n}/{max}", "bagHint": "Single Use: click to activate at the start of the next fight.", "bagFull": "Bag full", "padlocked": "Padlocked", "lightFull": "Lighting: Full", "lightSimple": "Lighting: Simple", "lightAutoSimple": "Frames were slow, so lighting switched to Simple. Change it with the Lighting button.", "itemSellTip": "Right-click: sell for ${gold}", "phase2Label": "At 50%:", "weakTo": "Weak to", "resistsLabel": "Resists", "nextBosses": "Coming up", "tierShort": "T{tier}", "miniWord": "Minis", "active": "On", "nightMarket": "Night Market", "marketEyebrow": "Choose one. No rerolls.", "take": "Take", "voidTitle": "Void", "voidHint": "no socket · can't be sold", "crystalUse": "Click: open the Night Market now.", "full": "Full", "itemRampTip": "Your {weapon}: {ramp}.", "itemWeaponsTip": "Weapons: {now} → {then}.",
     "breakdownTitle": "Damage breakdown", "breakdownDealt": "Dealt by", "breakdownAdded": "Added by", "breakdownTriggered": "{n}×",
     "breakdownAddedTip": "Extra damage each one added on top of the hits it boosted. Boosts overlap, so these can add up to more than the total.",
     "breakdownOther": "No damage counted",
@@ -747,11 +793,11 @@
     "tagTip": "Tags: the families this augment belongs to.",
     "tagsTitle": "Tags", "eventsTitle": "This fight", "capTip": "Cap: the most this stat can be. Past it the extra is overflow.",
     "noCap": "/∞", "statsAdded": "Stats added", "statsPerHit": "{v} {stat} per hit", "statsOnHits": "on {n}/{all} hits", "statsMax": "(max {v})", "statsGained": "gained {v} {stat}", "statsUpTo": "up to {v} {stat}", "statNamesExtra": { "blades": "Blades", "volley": "Volley", "critMult": "Crit multiplier", "size": "Size", "projBounce": "Projectile bounces", "bounceX": "Bounce count", "poisonX": "Poison damage", "burnX": "Burn damage", "frozenX": "Damage to Frozen" },
-    "armorCapTip": "Armor can block at most this share of each hit.",
+    "armorCapTip": "Armor: flat damage taken off every hit you take. It never takes off more than {cap}% of one hit.", "armorCap": "max {cap}%", "armorNoCap": "no max",
     "viewShop": "Shop", "viewArena": "Warm-up",
     "eventNames": { "hits": "Hits", "bounces": "Bounces", "crits": "Crits", "collisions": "Collisions", "kills": "Kills" },
     "rampTip": "Your {weapon}: {ramp}. Gained during a fight, reset after it.",
-    "multTip": "Mult on every hit, in socket order. Bonuses with a condition show on their own cards.",
+    "multTip": "In a fight: the Mult your next hit gets right now, in socket order, against the nearest enemy. Crits not counted. In the shop: the Mult that applies to every hit.",
     "sourceNames": { "weapon": "Weapon", "body": "Body hits", "proj": "Projectiles", "mini": "Minis", "miniyou": "Mini-Yous", "twin": "Your twin", "aoe": "Effects", "poison": "Poison", "burn": "Burn", "crit": "Crits", "ramp": "Ramp", "other": "Other", "lightning": "Lightning", "bomb": "Bombers", "pocket": "Pockets" }, "chainBest": "Best ×{n}", "chainRecord": "Record ×{n}", "jumpToCurrent": "Jump to current", "previewTag": "Preview", "previewTip": "Preview this fight", "previewCurrentTip": "Current fight"
   },
 
@@ -780,7 +826,7 @@
     "Burn": "{burnDps} damage/s per stack, +{burnPower}% of Power. Fades.",
     "Chill": "-{chillSlow}% Speed and Spin per stack. Fades. At {chillMax}: Frozen.",
     "Frozen": "Can't move or attack for {freezeSeconds}s. Bosses: half as long.",
-    "Knockback": "How far your blade pushes enemies. Max HP resists it.",
+    "Knockback": "How far your hits push enemies. Max HP resists it.",
     "Impact": "How hard your ball shoves enemies it bumps.",
     "Reach": "Length of your blade.",
     "Quest": "A goal. Once done, its reward lasts the rest of the run.",
@@ -791,7 +837,8 @@
     "Lightning": "A Shock kill jumps to the nearest enemy for +{lightningPct}% damage. Chains.",
     "Status": "Burn, Chill, Poison or Shock on an enemy.",
     "Cap": "The most a stat can be. Shown next to it, like /760.",
-    "Overflow": "The part of a stat above its cap. Kept, not lost: it does nothing by itself."
+    "Overflow": "The part of a stat above its cap. Kept, not lost: it does nothing by itself.",
+    "Void": "An augment from the Night Market. Takes no socket. Can't be sold."
   },
   "theme": {
     "_note": "Colors are hex codes. Fonts: 'display' and 'body' are family names. The files are in assets.fonts; a Google Fonts family also works if googleFontsUrl is its stylesheet link (leave it empty otherwise).",
@@ -832,8 +879,8 @@
     "weapons": { "blade": "#e8edf2", "guard": "#ffb72e", "shaft": "#b08968", "hammerHead": "#9aa5b1", "bow": "#d4a373", "shield": "#cbd5e1" },
     "projectiles": { "player": "#ffd23f", "enemy": "#ff5d73" },
     "damageText": { "hit": "#ffffff", "mini": "#ffe9a3", "area": "#9be7ff", "crit": "#ffd23f", "poison": "#7ee081", "burn": "#ff9f1c", "shock": "#7fdcff", "hurt": "#ff5d73", "heal": "#7ee081" },
-    "keywordColors": { "Ramp": "#7fe0d0", "Power": "#8c9eff", "Mult": "#f2609f", "Crit": "#ffd23f", "Poison": "#7ee081", "Burn": "#ff9f1c", "Armor": "#c9bfdc", "Mini": "#ffe9a3", "Charge": "#7fdcff", "Chill": "#a8e6ff", "Freeze": "#d9f4ff", "Frozen": "#d9f4ff", "Knockback": "#ffcf8a", "Impact": "#ffb88a", "Reach": "#a6e3b8", "Quest": "#f5c76b", "Collision": "#ffb36b", "Shock": "#8fe3ff", "Lightning": "#c9f2ff", "Status": "#e2d0ff", "Overflow": "#ffb3d9", "money": "#ffd23f" },
-    "effects": { "poisonRing": "#7ee081", "burnRing": "#ff9f1c", "lightning": "#bdf0ff", "spark": "#ffffff", "quake": "#ead9b5", "chill": "#a8e6ff", "freeze": "#d9f4ff", "shock": "#8fe3ff" }
+    "keywordColors": { "Ramp": "#7fe0d0", "Power": "#8c9eff", "Mult": "#f2609f", "Crit": "#ffd23f", "Poison": "#7ee081", "Burn": "#ff9f1c", "Armor": "#c9bfdc", "Mini": "#ffe9a3", "Charge": "#7fdcff", "Chill": "#a8e6ff", "Freeze": "#d9f4ff", "Frozen": "#d9f4ff", "Knockback": "#ffcf8a", "Impact": "#ffb88a", "Reach": "#a6e3b8", "Quest": "#f5c76b", "Collision": "#ffb36b", "Shock": "#8fe3ff", "Lightning": "#c9f2ff", "Status": "#e2d0ff", "Void": "#c39bff", "Overflow": "#ffb3d9", "money": "#ffd23f" },
+    "effects": { "poisonRing": "#7ee081", "burnRing": "#ff9f1c", "lightning": "#bdf0ff", "spark": "#ffffff", "quake": "#ead9b5", "chill": "#a8e6ff", "freeze": "#d9f4ff", "shock": "#8fe3ff", "void": "#b06cff" }
   },
 
   "assets": {
@@ -853,7 +900,7 @@
       },
       "weapons": { "sword": "assets/weapons/weapon-sword.png", "dagger": "assets/weapons/weapon-dagger.png", "spear": "assets/weapons/weapon-spear.png", "hammer": "assets/weapons/weapon-hammer.png", "bow": "assets/weapons/weapon-bow.png", "shield": "assets/weapons/weapon-shield.png" },
       "projectiles": { "player": null, "enemy": null },
-      "cardFrames": { "_note": "Picture of the whole card body, one per rarity name: frame, text plate and the socket for the art circle. Its measurements are in assets.cardFrameLayout. Set one to null to fall back to the built-in CSS metal.", "Common": "assets/cards/frame-common.png", "Uncommon": "assets/cards/frame-uncommon.png", "Rare": "assets/cards/frame-rare.png", "Epic": "assets/cards/frame-epic.png", "Legendary": "assets/cards/frame-legendary.png" },
+      "cardFrames": { "_note": "Picture of the whole card body, one per rarity name: frame, text plate and the socket for the art circle. Its measurements are in assets.cardFrameLayout. Set one to null to fall back to the built-in CSS metal.", "Common": "assets/cards/frame-common.png", "Uncommon": "assets/cards/frame-uncommon.png", "Rare": "assets/cards/frame-rare.png", "Epic": "assets/cards/frame-epic.png", "Legendary": "assets/cards/frame-legendary.png", "Void": "assets/cards/frame-epic.png" },
       "sellBin": { "_note": "The needle that augments are dragged onto to sell them. 256 x 256, transparent. 'armed' shows while an augment is held over it; leave it null to use 'idle' for both.", "idle": null, "armed": null },
       "icons": {
         "_note": "Small pictures shown on cards. Add any augment, weapon, tune-up or trophy id, for example \"whet\": \"assets/icons/whet.png\".",

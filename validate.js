@@ -76,7 +76,7 @@ function validateGameData(D){
   str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text');tuneLook(o,p)}
  // cap tune-ups: any other tune-up id must have "cap"
  for(const k of keys(D.tuneUps)){if(['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini'].includes(k))continue;const p='tuneUps.'+k,o=D.tuneUps[k];if(!isObj(o)){out.push(p+' must be an object');continue}
-  if(k!=='blade'&&!['spd','spin','blades','volley','armor'].includes(o.cap))out.push(p+' is not one of the eleven fixed tune-ups or "blade", so it must be a cap tune-up: "cap" must be spd, spin, blades, volley or armor');
+  if(k!=='blade'&&k!=='size'&&!['spd','spin','blades','volley','armor'].includes(o.cap))out.push(p+' is not one of the eleven fixed tune-ups or "blade", so it must be a cap tune-up: "cap" must be spd, spin, blades, volley or armor');
   str(o,'name',p);str(o,'text',p);num(o,'amount',p);holes(o.text,{amount:1},p+'.text');if('weight' in o)num(o,'weight',p);if('needs' in o&&o.needs!=='blade'&&o.needs!=='ranged')out.push(p+'.needs can only be "blade" or "ranged"');tuneLook(o,p)}
 
  // consumables (optional)

@@ -234,7 +234,7 @@ function toPrep(){
  const run=G.run;overlay.hidden=true;
  G.phase=run.pending?'trophy':'prep';G.peek=null;G.view='shop';previewFight();render();
 }
-function startFight(){const run=G.run;G.peek=null;G.S=newFight(run,{juice:true});G.phase='fight';G.paused=false;lastN=0;clearFx();audioOn();render()}
+function startFight(){const run=G.run;if(run.market)return;G.peek=null;G.S=newFight(run,{juice:true});G.phase='fight';G.paused=false;lastN=0;clearFx();audioOn();render()}
 function endFight(){
  const S=G.S,run=G.run;G.sheetId=(G.sheetId||0)+1;   // a new recap sheet: type it out once
  if(S.done==='win'){G.pay=payout(run,S);G.wasBoss=run.stage===2;G.lastBoss=run.enc.boss;G.finalWin=G.wasBoss&&run.tier===RULES.run.tiersToWin&&!run.endless;
@@ -259,7 +259,8 @@ document.addEventListener('click',e=>{
   case'buy':ok=buyOffer(run,i);break;
   case'tune':ok=buyTune(run,i);break;
   case'item':ok=buyItem(run,i);break;
-  case'item-use':ok=toggleItem(run,i);break;
+  case'item-use':if(run.bag[i]&&run.bag[i].id==='crystal'){ok=openMarket(run,i);if(ok){G.sheetId=null;play('coin')}break}ok=toggleItem(run,i);break;
+  case'void-pick':ok=pickVoid(run,b.dataset.id);if(ok){refreshPreview();play('coin')}break;
   case'item-sell':ok=sellItem(run,i);break;
   case'reroll':ok=reroll(run);break;
   case'sell':{if(performance.now()-G.sellAt<350)return;   // too soon after asking: a long press or a key repeat, not a decision
@@ -309,7 +310,7 @@ document.addEventListener('keydown',e=>{
 /* ---------- 5. side panel HTML ---------- */
 function augRow(a,i,run,mode){
  const d=AUG[a.id];if(!d)return'';
- const off=G.S&&(G.S.off?G.S.off.has(a):G.S.disabled===a)&&G.phase!=='payout',warn=mode==='prep'&&i===0&&run.enc.boss&&BOSS[run.enc.boss]&&BOSS[run.enc.boss].code.disablesTopAugment;
+ const off=(G.S&&(G.S.off?G.S.off.has(a):G.S.disabled===a)&&G.phase!=='payout')||(echoKeep(run)&&i>=echoKeep(run)),warn=mode==='prep'&&i===0&&run.enc.boss&&BOSS[run.enc.boss]&&BOSS[run.enc.boss].code.disablesTopAugment;
  const shadow=a.id==='mirror'&&a.sh&&AUG[a.sh.id]?a.sh:null,idef=shadow?AUG[shadow.id]:d,info=idef.info?idef.info(shadow||a,idef.v):'';
  let copy='';if(a.id==='mirror'){const nb=run.augs[i+1];copy=nb&&nb.id!=='mirror'&&AUG[nb.id]?t('mirrorCopying',{name:AUG[nb.id].name}):TX.mirrorNothing}
  const prep=mode==='prep',price=prep?sellValue(run,a.id):0,asking=prep&&G.sellArm===a;
@@ -330,6 +331,9 @@ function augList(run,mode){
  for(let i=run.augs.length;i<run.slots;i++)h+=`<li class="aug empty"><span class="ord">${i+1}</span> ${TX.emptySocket}</li>`;
  h+='</ol>';
  const tr=run.trophies.filter(id=>TROPHY[id]);
+ const vo=(run.void||[]).filter(id=>AUG[id]);
+ if(vo.length)h+=`<h3 class="void-h">${TX.voidTitle||'Void'} <span>${TX.voidHint||''}</span></h3><ol class="augs voids">${vo.map((id,k)=>augCard({id,kind:'owned',i:'v'+k,tag:'li',cls:' void',
+  notes:(()=>{const d=AUG[id],st=srcState(run,'void:'+id);return d.info?`<em>${d.info(st,d.v)}</em>`:''})()})).join('')}</ol>`;
  if(tr.length)h+=`<div class="trophies">${tr.map(id=>`<span data-tip="${esc(TROPHY[id].desc)}">${icon('trophies',id)}${TROPHY[id].name}</span>`).join('')}</div>`;
  return h+'</section>';
 }
@@ -337,7 +341,8 @@ function augList(run,mode){
 function readoutHtml(){const S=G.S,L=G.phase==='fight'&&S&&!S.preview&&S.last;
  return `<div class="readout${G.phase==='fight'?'':' idle'}" id="readout" aria-live="off"><div class="ro pw"><small>${TX.readoutPower}</small><b id="roP">${L?num(L.p):'–'}</b></div><i>×</i><div class="ro ml"><small>${TX.readoutMult}</small><b id="roM">${L?'×'+num(L.m):'–'}</b></div><div class="ro dm"><small>${TX.readoutLast}</small><b id="roD">${L?fmt(L.d)+(L.c?'!':''):'–'}</b></div></div>`}
 /* A stat's cap, shown after its value ("/760", or "no cap" after a cap Legendary). */
-function capTxt(run,k){const u=uncapped(run,k),c=capOf(run,k);return `<i class="cap">${u?(TX.noCap||'no cap'):'/'+c+(k==='armor'?'%':'')}</i>`}   // no hint (owner's call)
+function capTxt(run,k){const u=uncapped(run,k),c=capOf(run,k);if(k==='armor')return `<i class="cap">${u?(TX.armorNoCap||'no max'):tpl(TX.armorCap||'max {cap}%',{cap:c})}</i>`;   // Armor is a flat number; its cap is a share of a hit, so it reads "max 70%", not "/70%"
+ return `<i class="cap">${u?(TX.noCap||'no cap'):'/'+c}</i>`}   // no hint (owner's call)
 const NX=()=>TX.statNamesExtra||{};
 /* Tag counts (shown while you own Specialist or Tag Team): how many of your augments carry each tag; the most common is highlighted. */
 function tagTracker(run){if(!run.augs.some(a=>a.id==='specialist'||a.id==='tagteam'))return'';const n={};for(const a of run.augs){const d=AUG[a.id];if(d)for(const g of d.tags)n[g]=(n[g]||0)+1}
@@ -348,12 +353,12 @@ const TRACK={singularity:['hits','bounces','crits','collisions','kills'],rack:['
 function trackKeys(run){const s=new Set();for(const a of run.augs)for(const k of TRACK[a.id]||[])s.add(k);return['hits','bounces','crits','collisions','kills'].filter(k=>s.has(k))}
 function statBlock(run){
  const P=calcPlayer(run,null),W=P.W,N=TX.statNames,X=NX();
- const row=(k,v,cap)=>`<div><dt>${k}</dt><dd>${v}${cap?capTxt(run,cap):''}</dd></div>`;
+ const row=(k,v,cap,tip)=>`<div${tip?` data-tip="${esc(tip)}"`:''}><dt>${k}</dt><dd>${v}${cap?capTxt(run,cap):''}</dd></div>`;
  const volley=W.type==='bow'||P.projExtra>0||run.augs.some(a=>a.id==='sidearm');
  return `<section class="card" id="yourball"><h3>${TX.yourBall} <span>${W.name}${P.blades>1&&!W.fist?' ×'+P.blades:''}</span></h3>
   <p class="ramp"><b class="hint" data-tip="${esc(tpl(TX.rampTip||'',{weapon:W.name,ramp:W.ramp}))}">${TX.rampLabel}</b> ${rich(W.ramp)}${P.rampX>1?' (×'+num(P.rampX)+')':''}. ${TX.rampResets}</p>
   <dl class="stats">${row(N.hp,P.hp)}${row(N.power,num(P.pow))}<div data-tip="${esc(TX.multTip||'')}"><dt>${N.mult}</dt><dd>×${num(shopMult(run))}</dd></div>${row(N.crit,Math.round(P.crit*100)+'%')}
-  ${row(N.speed,Math.round(P.spd),'spd')}${W.fist?'':row(N.spin,num(P.spin),'spin')+row(N.reach,Math.round(P.reach))+row(X.blades||'Blades',P.blades,'blades')}${volley?row(X.volley||'Volley',1+P.projExtra,'volley'):''}${row(N.armor,num(P.armor),'armor')}${row(N.regen,num(P.regen)+'/s')}${W.fist?'':row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl>${tagTracker(run)}</section>`;
+  ${row(N.speed,Math.round(P.spd),'spd')}${W.fist?'':row(N.spin,num(P.spin),'spin')+row(N.reach,Math.round(P.reach))+row(X.blades||'Blades',P.blades,'blades')}${volley?row(X.volley||'Volley',1+P.projExtra,'volley'):''}${row(N.armor,num(P.armor),'armor',tpl(TX.armorCapTip||'',{cap:capOf(run,'armor')}))}${row(N.regen,num(P.regen)+'/s')}${W.fist&&!(P.kb>0)?'':row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl>${tagTracker(run)}</section>`;
 }
 /* The next-fight card. Its tracker shows the tier's three fights (two circles and a diamond). In the shop, the current fight and the ones still ahead are
    buttons: pressing one previews that fight here and in the warm-up (G.peek), and the Fight button becomes "Jump to current". */
@@ -425,7 +430,7 @@ function fightBall(run){
  return `<section class="card ballcard"><h3>${TX.yourBall} <span>${S.P.W.name}</span>
    <button class="fold-btn" data-act="stats" aria-expanded="${G.statsOpen}" aria-controls="livestats">${TX.statsToggle||'Stats'}<i></i></button></h3>
   <div class="hpbar"><i id="hpfill"></i><b id="hptxt"></b></div><p class="ramp" id="rampline"></p>
-  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.filter(l=>!(S.P.W.fist&&(l[0]==='spin'||l[0]==='reach'))).map(l=>`<div id="ls-${l[0]}"><dt>${N[l[0]]}</dt><dd><b>–</b>${caps[l[0]]?capTxt(run,caps[l[0]]):''}<small></small></dd></div>`).join('')}</dl></div></div>
+  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.filter(l=>!(S.P.W.fist&&(l[0]==='spin'||l[0]==='reach'))).map(l=>`<div id="ls-${l[0]}"${l[0]==='mult'?` data-tip="${esc(TX.multTip||'')}"`:''}><dt>${N[l[0]]}</dt><dd><b>–</b>${caps[l[0]]?capTxt(run,caps[l[0]]):''}<small></small></dd></div>`).join('')}</dl></div></div>
   ${tk.length?`<p class="tracker" id="evtrack"><b>${TX.eventsTitle||'This fight'}</b>${tk.map(k=>`<span data-ev="${k}">${(TX.eventNames||{})[k]||k} <em>0</em></span>`).join('')}</p>`:''}${tagTracker(run)}</section>`;
 }
 function fightPanel(run){return nextCard(run,'fight')+adminCard(run)+augList(run,'fight')}
@@ -452,6 +457,9 @@ function renderOverlay(){
   if(G.phase==='victory')h+=runStats(run)+`<div class="row"><button class="go" data-act="endless" data-primary>${TX.keepGoing}</button><button data-act="title">${TX.newRun}</button></div>`;
   else h+=`<button class="go" data-act="continue" data-primary>${run.pending?TX.pickTrophyButton:TX.toShop}</button>`;
   h+='</div>';
+ }else if(G.phase==='prep'&&run&&run.market){
+  h=`<div class="sheet market"><div class="eyebrow">${TX.marketEyebrow||'Choose one. No rerolls.'}</div><h2>${TX.nightMarket||'Night Market'}</h2><div class="offers">${run.market.map(id=>augCard({id,kind:'offer',tag:'div',
+   foot:`<button class="buy" data-act="void-pick" data-id="${id}"><small>${TX.take||'Take'}</small></button>`})).join('')}</div></div>`;
  }else if(G.phase==='trophy'){
   h=`<div class="sheet"><div class="eyebrow">${t('trophyEyebrow',{hp:RULES.player.hpPerBossBeaten})}</div><h2>${TX.trophyTitle}</h2><div class="trophy-pick">${run.pending.map(id=>`<button data-act="trophy" data-id="${id}">${icon('trophies',id)}<b>${TROPHY[id].name}</b><span>${rich(TROPHY[id].desc)}</span></button>`).join('')}</div></div>`;
  }else if(G.phase==='over'){
@@ -823,8 +831,8 @@ function adminAdd(){
  const run=G.run,inp=$('#adm-aug');if(!run||!inp)return;const q=inp.value.trim().toLowerCase();if(!q)return;
  const id=Object.keys(AUG).find(k=>AUG[k].name.toLowerCase()===q||k===q)||Object.keys(AUG).find(k=>AUG[k].name.toLowerCase().startsWith(q));
  const note=$('#adm-addnote');if(!id){if(note)note.textContent='No augment called "'+inp.value+'"';play('deny');return}
- if(run.augs.length>=run.slots)run.slots=run.augs.length+1;
- run.augs.push({id,n:0,f:{}});run.admin=true;audioOn();play('coin');
+ if(isVoid(id)){if(!(run.void||[]).includes(id))(run.void||(run.void=[])).push(id)}
+ else{if(run.augs.length>=run.slots)run.slots=run.augs.length+1;run.augs.push({id,n:0,f:{}})}run.admin=true;audioOn();play('coin');
  if(G.phase==='fight'&&G.S&&!G.S.done)applyAdmin();else if(G.phase==='prep')previewFight();
  render();const i2=$('#adm-aug');if(i2)i2.focus({preventScroll:true});const n2=$('#adm-addnote');if(n2)n2.textContent='Added '+AUG[id].name;
 }
@@ -899,7 +907,7 @@ function drawWeapon(b,w){
  if(w.mult>1){ctx.shadowColor=TH.page.gold;ctx.shadowBlur=10}   // a braced Lancer's spear glows
  else if(BL.weaponShadow&&BL.shadow){const L=sampleLight(b).dir,k=cv.width/AW,o=(BL.weaponShadowOffset||5)*k;ctx.shadowColor=rgba('#000000',BL.shadowOpacity);ctx.shadowBlur=0;ctx.shadowOffsetX=-L.x*o;ctx.shadowOffsetY=-L.y*o}   // the weapon's shadow on the floor, away from the light
  if(BL.weaponLight&&CAN_FILTER){const L=sampleLight(b).dir,f=1+(BL.weaponLight||0)*(Math.cos(w.ang)*L.x+Math.sin(w.ang)*L.y);if(Math.abs(f-1)>.01)ctx.filter='brightness('+f.toFixed(3)+')'}   // brighter when it points toward the light
- ctx.translate(b.x,b.y);ctx.rotate(w.ang);
+ ctx.translate(b.x,b.y);ctx.rotate(w.ang);if(w.side)ctx.translate(0,w.side);   // side-by-side bows
  const r=b.r,e=r+w.len,im=IMG['weapon.'+w.type],C=TH.weapons;
  if(im){
   if(w.type==='bow'){const h=34,wd=h*im.width/im.height;ctx.drawImage(im,r+6-wd/2,-h/2,wd,h)}
@@ -1178,6 +1186,7 @@ function liveDom(){
  {const ev=$('#evtrack');if(ev){const C=S.count||{},v={hits:C.hits||0,bounces:C.bounces||0,crits:C.crits||0,collisions:(C.collisions||0)+(C.enemyCollisions||0),kills:C.kills||0},top=Math.max(...Object.values(v));
   for(const sp of ev.querySelectorAll('[data-ev]')){const k=sp.dataset.ev,em=sp.querySelector('em');if(em.textContent!==''+v[k])em.textContent=v[k];sp.classList.toggle('top',v[k]===top&&top>0)}}}   // event counts for Singularity, Eight-Ball Rack, Kinetic Battery
  if(G.phase!=='fight')return;
+ (run.void||[]).forEach((id,k)=>{const d=AUG[id],lv=document.getElementById('lvv'+k);if(lv&&d&&d.live){const s=d.live(srcState(run,'void:'+id),S,d.v)||'';if(lv.textContent!==s)lv.textContent=s}});
  run.augs.forEach((a,i)=>{const el=document.getElementById('aug'+i);if(!el)return;if(S.off)el.classList.toggle('off',S.off.has(a));el.classList.toggle('on',S.pulses[i]!=null&&S.t-S.pulses[i]<.3);
   const sh=a.id==='mirror'&&a.sh&&AUG[a.sh.id]?a.sh:null,d=AUG[sh?sh.id:a.id],lv=document.getElementById('lv'+i);if(lv&&d&&d.live){const s=d.live(sh||a,S,d.v)||'';if(lv.textContent!==s)lv.textContent=s}});
 }

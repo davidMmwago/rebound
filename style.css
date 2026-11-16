@@ -384,3 +384,9 @@ html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border
 .adm-row input{font:inherit;font-size:var(--bfs,13.333px);color:var(--chalk);background:var(--ink);border:2px solid var(--drop);border-radius:8px;padding:4px 7px;min-width:0;flex:1 1 140px}
 .adm-row input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
 #adm-addnote{color:var(--gold)}
+/* Void list under the sockets, and the Night Market sheet (wider, so augment cards fit) */
+.void-h{font-size:var(--dpx,32.68px);color:var(--c5,#c39bff);margin-top:6px}
+.void-h span{font-family:var(--body);font-size:var(--bfs,13.333px);color:var(--dim)}
+.sheet.market{width:min(100%,560px)}
+.sheet.market h2{color:var(--c5,#c39bff)}
+.sheet.market .offers{display:flex;flex-direction:column;gap:10px}
