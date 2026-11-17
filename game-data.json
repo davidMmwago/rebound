@@ -8,7 +8,7 @@
     "You can delete a whole augment, enemy or boss to remove it from the game. Adding a new enemy or boss works from this file alone. Adding a new augment or trophy also needs code.",
     "Keys that start with an underscore are notes for humans and are ignored by the game."
   ],
-  "build": "20261117175455", "version": 28,
+  "build": "20261117180043", "version": 29,
 
   "rules": {
     "_note": "Distances are in arena units (the arena is 'arena.size' units wide). Speeds are units per second. Spin is radians per second (6.28 is one full turn a second).",

@@ -1153,14 +1153,17 @@ function rollShop(run,keepReroll){
  const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id)),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!isVoid(k));
  const w=DATA.rarities.map(r=>r.shopWeight+r.shopWeightPerTier*run.tier);if(has(run,'taste'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.taste.v.mult;   // Rare Taste: the third rarity (Rare) and every rarity above it
  let tot=0;for(const x of w)tot+=x;
+ const first=run.tier===1&&run.stage===0&&!run.endless,afford=c=>!first||c<=run.gold;   // the first shop only offers what you can afford
  for(let i=0;i<n;i++){let x=rnd(run)*tot,r=0;while(r<w.length-1&&x>=w[r]){x-=w[r];r++}
-  let c=ids.filter(k=>AUG[k].rar===r&&!owned.has(k)&&!offers.some(o=>o.id===k));
+  const free=k=>!owned.has(k)&&!offers.some(o=>o.id===k)&&afford(augCost(run,k));
+  let c=ids.filter(k=>AUG[k].rar===r&&free(k));
+  if(!c.length)c=ids.filter(free);
   if(!c.length)c=ids.filter(k=>!owned.has(k)&&!offers.some(o=>o.id===k));
   if(c.length)offers.push({id:pick(run,c),sold:false})}
- const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])&&!(TUNE[k].cap&&uncapped(run,TUNE[k].cap))&&!(TUNE[k].cap==='armor'&&capRaise(run,'armor')>=95-baseCap('armor'))),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
+ const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])&&!(TUNE[k].cap&&uncapped(run,TUNE[k].cap))&&!(TUNE[k].cap==='armor'&&capRaise(run,'armor')>=95-baseCap('armor'))&&afford(tuneCost(run,k))),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
  while(tunes.length<nt){const left=tk.filter(k=>!tunes.some(t=>t.k===k));let tw=0;for(const k of left)tw+=TUNE[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=TUNE[q].weight;if(x<0){k=q;break}}tunes.push({k,sold:false})}   // weighted: Hatchling is rarer
  const base=has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost;
- const ik=Object.keys(ITEM).filter(k=>fits(run,DATA.consumables[k])),items=[];for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k)&&!(k==='crystal'&&!voidPool(run).length));if(!left.length)break;let tw=0;for(const k of left)tw+=ITEM[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=ITEM[q].weight;if(x<0){k=q;break}}items.push({id:k,sold:false})}   // weighted (items' "weight", default 1)
+ const ik=Object.keys(ITEM).filter(k=>fits(run,DATA.consumables[k])&&afford(ITEM[k].cost)),items=[];for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k)&&!(k==='crystal'&&!voidPool(run).length));if(!left.length)break;let tw=0;for(const k of left)tw+=ITEM[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=ITEM[q].weight;if(x<0){k=q;break}}items.push({id:k,sold:false})}   // weighted (items' "weight", default 1)
  run.shop={offers,tunes,items,reroll:keepReroll?run.shop.reroll+RULES.economy.rerollCostStep:base};
 }
 function buyOffer(run,i){const o=run.shop.offers[i];if(!o||o.sold||run.augs.length>=run.slots)return false;const c=augCost(run,o.id);if(run.gold<c)return false;run.gold-=c;o.sold=true;   // cap Legendaries: the cap is gone for the rest of the run
