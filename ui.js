@@ -181,7 +181,7 @@ function rgba(hex,a){const h=String(hex).replace('#','');return'rgba('+parseInt(
 const RC=i=>'c'+i;
 function encSummary(enc){const m={};for(const id of enc.list){if(!ENEMY[id])continue;m[ENEMY[id].name]=(m[ENEMY[id].name]||0)+1}return Object.keys(m).map(k=>m[k]>1?k+' ×'+m[k]:k).join(', ')}
 /* Planning lines on the next-fight card: what each enemy type does, an elite if there is one, and the next two bosses. */
-function encNotes(enc){const seen=new Set(),out=[];for(const id of enc.list){const e=ENEMY[id];if(!e||seen.has(id)||!e.about)continue;seen.add(id);out.push(`<b>${e.name}</b>: ${rich(e.about)}`)}
+function encNotes(enc){const seen=new Set(),out=[];for(const id of enc.list){const e=ENEMY[id];const ab=G.run&&G.run.tier>RULES.run.tiersToWin&&e.aboutEndless?e.aboutEndless:e.about;if(!e||seen.has(id)||!ab)continue;seen.add(id);out.push(`<b>${e.name}</b>: ${rich(ab)}`)}
  let h=out.length?`<p class="with">${out.join('<br>')}</p>`:'';
  if(enc.elite&&ENEMY[enc.list[enc.elite.i]])h=`<p class="rule elite-line">${tpl(TX.eliteLine||'Elite: {mod} {name}',{mod:(TX.eliteNames||{})[enc.elite.mod]||enc.elite.mod,name:ENEMY[enc.list[enc.elite.i]].name})}</p>`+h;
  return h}
@@ -283,6 +283,7 @@ document.addEventListener('click',e=>{
   case'adm-motion':G.forceMotion=!G.forceMotion;savePrefs();setMotion();render();return;
   case'adm-reset':if(run){run.override=null;applyAdmin();render()}return;
   case'adm-add':adminAdd();return;
+  case'adm-tier':adminTier();return;
   case'adm-gold':if(run){run.gold+=50;run.admin=true;render()}return;
   case'adm-win':if(G.phase==='fight'&&G.S&&!G.S.done){run.admin=true;for(const q of G.S.balls)if(q.team===1)q.alive=false;G.S.done='win'}return;
   case'adm-impact':{const l=(IMPCFG.levels||[])[i],p=G.S&&G.S.player;if(l){audioOn();Impact.trigger({level:l,x:p?p.x:AW/2,y:p?p.y:AH/2},true);const n=$('#adm-note');if(n)n.textContent=impactNote()}return}
@@ -351,14 +352,57 @@ function tagTracker(run){if(!run.augs.some(a=>a.id==='specialist'||a.id==='tagte
 /* Event counts this fight (shown while you own an augment that counts them: Singularity, Eight-Ball Rack, Kinetic Battery). */
 const TRACK={singularity:['hits','bounces','crits','collisions','kills'],rack:['collisions'],battery:['bounces']};
 function trackKeys(run){const s=new Set();for(const a of run.augs)for(const k of TRACK[a.id]||[])s.add(k);return['hits','bounces','crits','collisions','kills'].filter(k=>s.has(k))}
+/* Hover lists for the stats (Your ball card, shop and fight): every source of a stat and what it adds, with "(conditional: why)" on the ones that
+   only apply sometimes. Sources: your weapon and the base rules, tune-ups, bosses beaten, what each augment, trophy or item adds at fight start
+   (P.log), and in a fight the weapon's Ramp and what each source gained during it (S.dynStat). Power, Mult and Crit add the per-hit sources from
+   statView() (core.js). V is statView(S, true). */
+function statTips(run,S,V,live){
+ const P=S.P,W=P.W,t=run.tune,R=S.ramp||{},pr=RULES.player,N=TX.statNames,X=NX(),L={},CT=TX.condTag||'conditional';
+ const add=(k,name,txt,cond)=>(L[k]||(L[k]=[])).push(name+': '+txt+(cond?' ('+CT+')':''));
+ const nm=k=>{const d=AUG[k]||TROPHY[k]||ITEM[k];return d?d.name:k};
+ const sg=(v,d)=>(v<0?'−':'+')+num(Math.abs(v))+(d||'');
+ const pc=v=>sg(v*100,'%');
+ const tune=(k,stat,txt)=>{const n=t[k]||0;if(n&&TUNE[k])add(stat,TUNE[k].name+(n>1?' ×'+n:''),txt(n*TUNE[k].amount))};
+ add('hp',TX.baseLabel||'Base',num(pr.baseHp));tune('hp','hp',a=>sg(a));if(run.grown)add('hp',TX.bossesBeaten||'Bosses beaten',sg(pr.hpPerBossBeaten*run.grown));
+ add('pow',W.name,num(W.pow));tune('pow','pow',a=>sg(a));
+ add('mult',TX.baseLabel||'Base','×1');
+ add('crit',TX.baseLabel||'Base',num(pr.critChancePercent)+'%');tune('crit','crit',a=>sg(a,'%'));
+ add('spd',W.name,num(W.spd));tune('spd','spd',a=>sg(a,'%'));
+ if(!W.fist){add('spin',W.name,num(W.spin));tune('spin','spin',a=>sg(a,'%'));add('reach',W.name,num(W.reach));tune('reach','reach',a=>sg(a,'%'));add('blades',W.name,num(W.blades));tune('blade','blades',a=>sg(a))}
+ tune('armor','armor',a=>sg(a));tune('regen','regen',a=>sg(a,'/s'));
+ if(W.kb)add('kb',W.name,num(W.kb));tune('knock','kb',a=>sg(a,'%'));
+ if(W.impact||pr.impact)add('impact',W.name,num(W.impact+(pr.impact||0)));tune('impact','impact',a=>sg(a));
+ if(W.type==='bow'||P.projExtra>0)add('volley',TX.baseLabel||'Base','1');
+ const MAP={projExtra:'volley'},FR={crit:1};
+ const LG=P.log||{};for(const id in LG)for(const k in LG[id]){const v=LG[id][k];
+  if(k.startsWith('inc.')){const s=k.slice(4);add(MAP[s]||s,nm(id),pc(v))}
+  else if(k.startsWith('more.')){const s=k.slice(5);add(MAP[s]||s,nm(id),'×'+num(v))}
+  else add(MAP[k]||k,nm(id),FR[k]?pc(v):sg(v,k==='regen'?'/s':''))}
+ if(live){const D=S.dynStat||{},tot={};for(const id in D)for(const k in D[id]){const q=D[id][k];tot[k]=(tot[k]||0)+q.tot;if(Math.abs(q.tot)<1e-6)continue;
+   const g=k==='spd'||k==='crit'?pc(q.tot):sg(q.tot,k==='regen'?'/s':'');add(k,nm(id),g+' '+(TX.gainedFight||'this fight'))}
+  const ramp=(k,v,f)=>{const r=v-(tot[k]||0);if(Math.abs(r)>1e-6)add(k,TX.rampLabel||'Ramp',f(r))};
+  ramp('pow',R.pow||0,v=>sg(v));ramp('mult',R.mult||0,v=>sg(v));ramp('crit',R.crit||0,pc);ramp('spd',R.spd||0,pc);ramp('reach',R.reach||0,v=>sg(v));
+  if(R.spin>1)add('spin',TX.rampLabel||'Ramp',pc(R.spin-1));if(S.chill<1)add('spd',TX.chilledLabel||'Chilled','×'+num(S.chill))}
+ if(V.fist>1)add('mult',W.name,'×'+num(V.fist)+' '+(TX.fistSpeedNote||'(Speed above base, body hits)'));
+ for(const l of V.lines||[])add(l.stat,l.key&&l.id&&l.key!==l.id?nm(l.key)+' ('+nm(l.id)+')':nm(l.key),l.txt,l.cond);
+ const capL=(k,c)=>{if(P.over&&P.over[c]>0)add(k,TX.capLabel||'Cap',tpl(TX.cappedAt||'capped at {cap} ({over} over)',{cap:capOf(run,c),over:num(P.over[c])}))};capL('spd','spd');capL('spin','spin');capL('blades','blades');
+ if(run.override)for(const k in run.override)add(k,TX.adminLabel||'Admin','= '+num(run.override[k]));
+ const note=(k,b)=>b>1e-6?'\n'+tpl(TX.condNote||'(+{v}): more when its conditional bonuses apply.',{v:num(b)}):'';
+ const out={};for(const k in L)out[k]=L[k].join('\n');
+ out.pow=(out.pow||'')+note('pow',V.powB);out.mult=(TX.multOrder||'+Mult adds first, then ×Mult multiplies, top socket to bottom.')+'\n'+(out.mult||'')+note('mult',V.multB);
+ out.hit=(TX.hitTip||'Power × Mult: one hit before Crits and enemy Armor.')+note('hit',V.hitB);
+ out.armor=tpl(TX.armorCapTip||'',{cap:capOf(run,'armor')})+(out.armor?'\n'+out.armor:'');
+ return out;
+}
+const condEm=b=>b>1e-6?`<em class="cb">(+${num(b)})</em>`:'';
 function statBlock(run){
- const P=calcPlayer(run,null),W=P.W,N=TX.statNames,X=NX();
- const row=(k,v,cap,tip)=>`<div${tip?` data-tip="${esc(tip)}"`:''}><dt>${k}</dt><dd>${v}${cap?capTxt(run,cap):''}</dd></div>`;
- const volley=W.type==='bow'||P.projExtra>0||run.augs.some(a=>a.id==='sidearm');
- return `<section class="card" id="yourball"><h3>${TX.yourBall} <span>${W.name}${P.blades>1&&!W.fist?' ×'+P.blades:''}</span></h3>
+ const S=shopState(run),P=S.P,W=P.W,N=TX.statNames,X=NX(),V=statView(S,true),T=statTips(run,S,V,false);
+ const row=(k,v,cap,key,b)=>`<div${T[key]?` data-tip="${esc(T[key])}"`:''}><dt>${k}</dt><dd>${v}${condEm(b)}${cap?capTxt(run,cap):''}</dd></div>`;
+ const volley=W.type==='bow'||P.projExtra>0||run.augs.some(a=>a.id==='sidearm'),blade=!W.fist&&!P.noWeapon;
+ return `<section class="card" id="yourball"><h3>${TX.yourBall} <span>${W.name}${P.blades>1&&blade?' ×'+P.blades:''}</span></h3>
   <p class="ramp"><b class="hint" data-tip="${esc(tpl(TX.rampTip||'',{weapon:W.name,ramp:W.ramp}))}">${TX.rampLabel}</b> ${rich(W.ramp)}${P.rampX>1?' (×'+num(P.rampX)+')':''}. ${TX.rampResets}</p>
-  <dl class="stats">${row(N.hp,P.hp)}${row(N.power,num(P.pow))}<div data-tip="${esc(TX.multTip||'')}"><dt>${N.mult}</dt><dd>×${num(shopMult(run))}</dd></div>${row(N.crit,Math.round(P.crit*100)+'%')}
-  ${row(N.speed,Math.round(P.spd),'spd')}${W.fist?'':row(N.spin,num(P.spin),'spin')+row(N.reach,Math.round(P.reach))+row(X.blades||'Blades',P.blades,'blades')}${volley?row(X.volley||'Volley',1+P.projExtra,'volley'):''}${row(N.armor,num(P.armor),'armor',tpl(TX.armorCapTip||'',{cap:capOf(run,'armor')}))}${row(N.regen,num(P.regen)+'/s')}${W.fist&&!(P.kb>0)?'':row(N.knock||'Knockback',Math.round(P.kb))}${row(N.impact||'Impact',Math.round(P.impact))}</dl>${tagTracker(run)}</section>`;
+  <dl class="stats">${row(N.hp,P.hp,'','hp')}${row(N.power,num(V.pow),'','pow',V.powB)}${row(N.mult,'×'+num(V.mult),'','mult',V.multB)}${row(N.hit||'Hit',num(V.hit),'','hit',V.hitB)}${row(N.crit,Math.round(V.crit*100)+'%','','crit')}
+  ${row(N.speed,Math.round(P.spd),'spd','spd')}${blade?row(N.spin,num(P.spin),'spin','spin')+row(N.reach,Math.round(P.reach),'','reach')+row(X.blades||'Blades',P.blades,'blades','blades'):''}${volley?row(X.volley||'Volley',1+P.projExtra,'volley','volley'):''}${row(N.armor,num(P.armor),'armor','armor')}${row(N.regen,num(P.regen)+'/s','','regen')}${W.fist&&!(P.kb>0)?'':row(N.knock||'Knockback',Math.round(P.kb),'','kb')}${row(N.impact||'Impact',Math.round(P.impact),'','impact')}</dl>${tagTracker(run)}</section>`;
 }
 /* The next-fight card. Its tracker shows the tier's three fights (two circles and a diamond). In the shop, the current fight and the ones still ahead are
    buttons: pressing one previews that fight here and in the warm-up (G.peek), and the Fight button becomes "Jump to current". */
@@ -430,7 +474,7 @@ function fightBall(run){
  return `<section class="card ballcard"><h3>${TX.yourBall} <span>${S.P.W.name}</span>
    <button class="fold-btn" data-act="stats" aria-expanded="${G.statsOpen}" aria-controls="livestats">${TX.statsToggle||'Stats'}<i></i></button></h3>
   <div class="hpbar"><i id="hpfill"></i><b id="hptxt"></b></div><p class="ramp" id="rampline"></p>
-  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.filter(l=>!(S.P.W.fist&&(l[0]==='spin'||l[0]==='reach'))).map(l=>`<div id="ls-${l[0]}"${l[0]==='mult'?` data-tip="${esc(TX.multTip||'')}"`:''}><dt>${N[l[0]]}</dt><dd><b>–</b>${caps[l[0]]?capTxt(run,caps[l[0]]):''}<small></small></dd></div>`).join('')}</dl></div></div>
+  <div class="fold${G.statsOpen?' open':''}" id="livestats"><div><dl class="stats livegrid">${LIVE.filter(l=>!(S.P.W.fist&&(l[0]==='spin'||l[0]==='reach'))).map(l=>`<div id="ls-${l[0]}"><dt>${N[l[0]]||l[0]}</dt><dd><b>–</b>${caps[l[0]]?capTxt(run,caps[l[0]]):''}<span class="sd">${l[5]?'<em class="cb"></em>':''}<small></small></span></dd></div>`).join('')}</dl></div></div>
   ${tk.length?`<p class="tracker" id="evtrack"><b>${TX.eventsTitle||'This fight'}</b>${tk.map(k=>`<span data-ev="${k}">${(TX.eventNames||{})[k]||k} <em>0</em></span>`).join('')}</p>`:''}${tagTracker(run)}</section>`;
 }
 function fightPanel(run){return nextCard(run,'fight')+adminCard(run)+augList(run,'fight')}
@@ -464,7 +508,7 @@ function renderOverlay(){
   h=`<div class="sheet"><div class="eyebrow">${t('trophyEyebrow',{hp:RULES.player.hpPerBossBeaten})}</div><h2>${TX.trophyTitle}</h2><div class="trophy-pick">${run.pending.map(id=>`<button data-act="trophy" data-id="${id}">${icon('trophies',id)}<b>${TROPHY[id].name}</b><span>${rich(TROPHY[id].desc)}</span></button>`).join('')}</div></div>`;
  }else if(G.phase==='over'){
   const b=run.enc.boss&&BOSS[run.enc.boss];
-  h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}${breakdown(G.S,run)}<div class="row"><button class="go" data-act="restart-now" data-primary>${TX.restart||'Restart'}</button><button data-act="title">${TX.newRun}</button></div></div>`;
+  h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}${breakdown(G.S,run)}<div class="row"><button class="go" data-act="title" data-primary>${TX.newRun}</button></div></div>`;
  }
  if(typer)typer.cancel();
  overlay.innerHTML=h;overlay.hidden=!h;
@@ -586,7 +630,7 @@ function augCard(o){
 }
 /* Text that did not fit on a card (class ac-clip) gets its full wording as a hint, followed by data-tip-extra. Runs after the side panel is rebuilt or resized. */
 function fixTips(){
- for(const el of document.querySelectorAll('#side .ac-clip,#shopview .ac-clip,#left .ac-clip')){
+ for(const el of document.querySelectorAll('#side .ac-clip,#shopview .ac-clip,#left .ac-clip,#overlay .ac-clip')){
   const cut=el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1,extra=el.getAttribute('data-tip-extra')||'';
   const tip=(cut?el.textContent.trim().replace(/\s+/g,' ')+(extra?' ':''):'')+extra;
   if(tip)el.setAttribute('data-tip',tip);else el.removeAttribute('data-tip')}
@@ -777,12 +821,15 @@ const Impact={
 /* ---------- live stats and admin tools ---------- */
 /* Rows of the expandable stats panel in the fight card: [key in text.statNames, read the current value from the fight, format it, format a change]. */
 const r2=v=>Math.abs(v)<1e4?''+Math.round(v*100)/100:short(v);
+/* The fight's stat view, worked out once per update (liveStats): Power, Mult, Hit and Crit are what your next hit gets right now (statView in core.js). */
+let VW=null;
 const LIVE=[
  ['hp',S=>S.player.maxhp,v=>''+Math.round(v),v=>''+Math.round(v)],
- ['power',S=>S.P.pow+S.ramp.pow,num,num],
- ['mult',S=>shownMult(S),v=>'×'+r2(v),r2],   // every always-on ×Mult and +Mult, in socket order (shownMult in core.js)
- ['crit',S=>(S.P.crit+S.ramp.crit)*100,v=>Math.round(v)+'%',v=>Math.round(v)+'%'],
- ['speed',S=>S.player.spd,v=>''+Math.round(v),v=>''+Math.round(v)],
+ ['power',S=>VW.pow,num,num,'pow','powB'],
+ ['mult',S=>VW.mult,v=>'×'+r2(v),r2,'mult','multB'],
+ ['hit',S=>VW.hit,num,num,'hit','hitB'],
+ ['crit',S=>VW.crit*100,v=>Math.round(v)+'%',v=>Math.round(v)+'%','crit'],
+ ['speed',S=>S.player.spd,v=>''+Math.round(v),v=>''+Math.round(v),'spd'],
  ['spin',S=>S.player.ws[0]?S.player.ws[0].spin:0,num,num],
  ['reach',S=>S.player.ws[0]?S.player.ws[0].len:0,v=>''+Math.round(v),v=>''+Math.round(v)],
  ['armor',S=>S.player.armor,num,num],
@@ -790,13 +837,16 @@ const LIVE=[
 ];
 /* Updates the live stats. Each value shows its change since the fight began and ticks when it moves. */
 function liveStats(S){
- if(!G.liveBase||G.liveBase.S!==S)G.liveBase={S,v:LIVE.map(l=>l[1](S)),last:[]};
+ const tipsNow=!G.liveBase||G.liveBase.S!==S||(++G.liveBase.n%8===0);VW=statView(S,tipsNow);
+ if(!G.liveBase||G.liveBase.S!==S)G.liveBase={S,v:LIVE.map(l=>l[1](S)),last:[],n:0};
  const B=G.liveBase;
+ if(tipsNow){const T=statTips(G.run,S,VW,true);LIVE.forEach(l=>{const el=document.getElementById('ls-'+l[0]),tip=T[l[4]||l[0]];if(!el)return;if(tip){if(el.getAttribute('data-tip')!==tip){el.setAttribute('data-tip',tip);if(tipOn===el)showTip(el)}}else el.removeAttribute('data-tip')})}
  LIVE.forEach((l,i)=>{const el=document.getElementById('ls-'+l[0]);if(!el)return;
   const v=l[1](S),txt=l[2](v),b=el.querySelector('b'),sm=el.querySelector('small');
   if(b.textContent!==txt){b.textContent=txt;const d=v-B.v[i],dt=l[3](Math.abs(d));
    sm.textContent=Math.abs(d)>1e-6&&dt!=='0'&&dt!=='0%'?(d>0?'+':'−')+dt:'';sm.className=d>0?'up':d<0?'down':'';
    const prev=B.last[i];if(prev!=null&&Math.abs(v-prev)>1e-6&&!reduce){el.classList.remove('tick-up','tick-down');void el.offsetWidth;el.classList.add(v>prev?'tick-up':'tick-down')}}
+  if(l[5]){const em=el.querySelector('.cb'),c=VW[l[5]]>1e-6?'(+'+num(VW[l[5]])+')':'';if(em&&em.textContent!==c)em.textContent=c}
   B.last[i]=v});
 }
 /* Admin panel: test tools for the owner, shown when the Admin button is on. Players never see it, so its labels are plain English in code.
@@ -808,6 +858,7 @@ function adminCard(run){
  let h=`<section class="card admin"><h3>Admin <span>a value here replaces that stat · best run is not recorded</span></h3><div class="adm-grid">`;
  for(const[k,label,m]of ADM)h+=`<label for="adm-${k}">${label}<input id="adm-${k}" data-adm="${k}" type="number" step="any" inputmode="decimal" placeholder="${r2(base[k]*m)}" value="${o[k]!=null?r2(o[k]*m):''}"></label>`;
  h+=`</div><div class="adm-row"><label for="adm-aug">Add augment</label><input id="adm-aug" list="adm-auglist" placeholder="Type a name" autocomplete="off"><datalist id="adm-auglist">${Object.keys(AUG).sort((a,b)=>AUG[a].rar-AUG[b].rar||AUG[a].name.localeCompare(AUG[b].name)).map(id=>`<option value="${esc(AUG[id].name)}">${RAR[AUG[id].rar]}</option>`).join('')}</datalist><button data-act="adm-add">Add</button><span id="adm-addnote"></span></div>`;
+ h+=`<div class="adm-row"><label for="adm-tier">Tier</label><input id="adm-tier" type="number" min="1" max="99" step="1" value="${run.tier}" style="flex:0 0 64px"><select id="adm-stage" aria-label="Fight">${TX.stageNames.map((n,i)=>`<option value="${i}"${i===run.stage?' selected':''}>${n}</option>`).join('')}</select><button data-act="adm-tier">Go</button></div>`;
  h+=`<div class="adm-row"><button data-act="adm-reset">Clear</button><button data-act="adm-gold">+$50</button>${G.phase==='fight'?'<button data-act="adm-win">Win fight</button>':''}</div>`;
  const lv=IMPCFG.levels||[];
  if(lv.length)h+=`<div class="adm-row"><span>Impact frame</span>${lv.map((l,i)=>`<button data-act="adm-impact" data-i="${i}">${l.name||'Level '+(i+1)}</button>`).join('')}</div>`;
@@ -837,6 +888,13 @@ function adminAdd(){
  render();const i2=$('#adm-aug');if(i2)i2.focus({preventScroll:true});const n2=$('#adm-addnote');if(n2)n2.textContent='Added '+AUG[id].name;
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='adm-aug'){e.preventDefault();adminAdd()}});
+/* Admin: jumps the current run to a tier and fight (your build, gold and trophies stay). Tiers past the last one are endless. Any fight in progress ends. */
+function adminTier(){
+ const run=G.run,ti=$('#adm-tier'),sg=$('#adm-stage');if(!run||!ti)return;
+ const T=Math.max(1,Math.min(99,Math.round(+ti.value||1))),st=Math.max(0,Math.min(2,+(sg&&sg.value)||0));
+ run.tier=T;run.stage=st;run.endless=T>RULES.run.tiersToWin;run.pending=null;run.market=null;run.admin=true;
+ planTier(run);rollShop(run);audioOn();play('coin');toPrep();
+}
 /* Applies changed overrides to whatever is on screen: the running fight, or the warm-up preview. */
 function applyAdmin(){
  const run=G.run,S=G.S;if(!run||!S)return;run.admin=true;
@@ -884,7 +942,15 @@ function drain(S){
 }
 /* Draws one weapon. Sprite art (if set) points right with the grip at the left edge. */
 /* Boss and enemy rules drawn on the floor: The Eight Ball's pockets, The Furnace's glowing walls, The Glacier's ice. */
-function drawArenaRules(S){
+/* Ram paths (pool balls, endless Grunts): a dashed line in the ball's colour with a dark outline, from where it stands through its bounces. It pulses
+   while the ball winds up and stays faint during the charge. */
+function drawRamPaths(S){for(const b of S.balls){if(!b.alive||!b.ramPts||b.ramPts.length<2)continue;const Q=b.wind||!b.ram?b.ramPts:[[b.x,b.y]].concat(b.ramPts.slice(b.ram.n+1));if(Q.length<2)continue;ctx.globalAlpha=b.wind?.6+.4*Math.sin(S.t*18):.3;   // charging: only the part still ahead
+ if(PXL){const k=new Set();let dist=0;for(let i=1;i<Q.length;i++){const x1=Q[i-1][0],y1=Q[i-1][1],x2=Q[i][0],y2=Q[i][1],L=Math.hypot(x2-x1,y2-y1),n=Math.max(1,Math.ceil(L/(PXL*.7)));
+   for(let j=0;j<=n;j++){const q=j/n;if(Math.floor((dist+L*q)/7)%2===0)pxDotKey(k,x1+(x2-x1)*q,y1+(y2-y1)*q)}dist+=L}
+  const o=new Set();for(const q of k){const[a,c]=q.split(',').map(Number);for(const[u,v]of[[1,0],[-1,0],[0,1],[0,-1]])o.add((a+u)+','+(c+v))}pxFill(o,1,INK);pxFill(k,1,b.col)}
+ else{ctx.beginPath();ctx.moveTo(Q[0][0],Q[0][1]);for(let i=1;i<Q.length;i++)ctx.lineTo(Q[i][0],Q[i][1]);ctx.setLineDash([7,7]);ctx.lineWidth=4;ctx.strokeStyle=INK;ctx.stroke();ctx.lineWidth=2;ctx.strokeStyle=b.col;ctx.stroke();ctx.setLineDash([])}
+ ctx.globalAlpha=1}}
+function drawArenaRules(S){drawRamPaths(S);
  if(S.pockets){const r=S.pockets.r;for(const[cx,cy]of[[0,0],[AW,0],[0,AH],[AW,AH]]){ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.fillStyle=INK;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=rgba(TH.page.chalk,.35);ctx.stroke()}}
  if(S.hotWalls){const a=.35+.2*Math.sin(S.t*8);ctx.fillStyle=rgba(TH.damageText.burn,a);for(const w of S.hotWalls){if(w===0)ctx.fillRect(0,0,6,AH);else if(w===1)ctx.fillRect(AW-6,0,6,AH);else if(w===2)ctx.fillRect(0,0,AW,6);else ctx.fillRect(0,AH-6,AW,6)}}
  for(const z of S.ice){const q=Math.min(1,z.t/Math.min(1,z.t0));ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,TAU);ctx.fillStyle=rgba(TH.effects.freeze||'#d9f4ff',.22*q);ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=rgba(TH.effects.freeze||'#d9f4ff',.6*q);ctx.stroke()}
@@ -899,6 +965,7 @@ function drawBallMarks(b,S){
  if(b.fuse!=null){ctx.lineWidth=2.5;ctx.strokeStyle=rgba(TH.damageText.burn,.6+.4*Math.sin(S.t*30));ctx.beginPath();ctx.arc(b.x,b.y,b.r+4+(1-b.fuse)*6,0,TAU);ctx.stroke()}
  if(b.kind==='stabber'&&b.ready){ctx.lineWidth=1.2;ctx.strokeStyle=rgba(TH.page.chalk,.7);ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,TAU);ctx.stroke();ctx.setLineDash([])}
  if(b.hut&&!IMG['ball.hut'])drawHutRoof(b);
+ if(b.angry){ctx.lineWidth=2;ctx.strokeStyle=rgba(TH.page.mult,.65+.35*Math.sin(S.t*10));ctx.beginPath();ctx.arc(b.x,b.y,b.r+4,0,TAU);ctx.stroke()}   // an angry pool ball
  if(b.elite){ctx.lineWidth=1.2;ctx.strokeStyle=TH.page.gold;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3.5,0,TAU);ctx.stroke()}
  if(b.shieldOn){const a=Math.atan2(b.vy,b.vx),w=(S.bossDef&&S.bossDef.v.shieldArc)||1.1;ctx.lineCap='round';ctx.lineWidth=8;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle=TH.weapons.shield;ctx.beginPath();ctx.arc(b.x,b.y,b.r+7,a-w,a+w);ctx.stroke();ctx.lineCap='butt'}
 }
@@ -979,6 +1046,7 @@ function pixelPass(S,dt){
  const A_=TH.arena;
  for(const b of S.balls){if(!b.alive||IMG['ball.'+b.kind])continue;
   const C=shades(b.col),D=rgbOf(C.dark),M=rgbOf(C.mid),B=rgbOf(C.base),Lt=rgbOf(C.lit),ls=sampleLight(b),L=ls.dir,r=b.r,sh=b._sh;
+  const pool=b.kind==='pool'||(b.kind==='eight'&&b.boss)?rollBall(b):null,PW=pool?[D,M,B,Lt].map((_,k)=>rgbOf(shades(POOL_WHITE)[['dark','mid','base','lit'][k]])):null,PC=[D,M,B,Lt];   // pool balls: stripes and number circles roll with the ball
   const OC=rgbOf(b.player||b.twin?A_.playerOutline:b.boss?A_.bossOutline:A_.outline),ow=P;   // one pixel for every ball
   const mx=b.x+L.x*r*.16,my=b.y+L.y*r*.16,bx=b.x+L.x*r*.3,by=b.y+L.y*r*.3,hx=b.x+L.x*r*.45,hy=b.y+L.y*r*.45,wx=hx+L.x*r*.04,wy=hy+L.y*r*.04,hr=Math.max(r*.2,P*.9),wr=Math.max(r*.08,P*.55);
   const T=ls.top,tA=T&&T.w>.05?Math.min(.32,T.w*.16):0,TC=tA?rgbOf(T.col):null,tx=T?b.x+T.x*r*.55:0,ty=T?b.y+T.y*r*.55:0,fl=b.flash>0;
@@ -990,8 +1058,10 @@ function pixelPass(S,dt){
    const d=Math.hypot(dx,dy);if(d>r)continue;
    const px=b.x+dx,py=b.y+dy,i=y*W+x;
    if(d>r-ow){put(i,OC[0],OC[1],OC[2]);continue}
-   let c=D;if(BL.shading){if(Math.hypot(px-mx,py-my)<r*.96)c=M;if(Math.hypot(px-bx,py-by)<r*.76)c=B;
-    if(BL.highlight){if(Math.hypot(px-hx,py-hy)<hr)c=Lt;if(Math.hypot(px-wx,py-wy)<wr)c=[255,255,255]}}else c=rgbOf(b.col);
+   let c=D,z=0;if(BL.shading){if(Math.hypot(px-mx,py-my)<r*.96){c=M;z=1}if(Math.hypot(px-bx,py-by)<r*.76){c=B;z=2}
+    if(BL.highlight){if(Math.hypot(px-hx,py-hy)<hr){c=Lt;z=3}if(Math.hypot(px-wx,py-wy)<wr){c=[255,255,255];z=4}}}else{c=rgbOf(b.col);z=2}
+   if(pool&&z<4){const R_=pool,nx=dx/r,ny=dy/r,nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny)),by_=R_[1]*nx+R_[4]*ny+R_[7]*nz,bz_=R_[2]*nx+R_[5]*ny+R_[8]*nz;   // this pixel in the ball's own frame
+    const white=Math.abs(bz_)>.82||(b.stripe&&Math.abs(by_)>.5);c=(white?PW:PC)[z]}
    let R0=c[0],G0=c[1],B0=c[2];
    if(tA&&Math.hypot(px-tx,py-ty)<r*.85){R0=Math.min(255,R0+TC[0]*tA);G0=Math.min(255,G0+TC[1]*tA);B0=Math.min(255,B0+TC[2]*tA)}
    if(fl){R0+=(255-R0)*.8;G0+=(255-G0)*.8;B0+=(255-B0)*.8}
@@ -1008,6 +1078,18 @@ function pxRing(set,x,y,r){const n=Math.max(8,Math.ceil(TAU*r/(PXL*.7)));for(let
 function pxDisc(set,x,y,r){const R_=Math.max(r,PXL*.5);for(let gy=Math.floor((y-R_)/PXL);gy<=Math.floor((y+R_)/PXL);gy++)for(let gx=Math.floor((x-R_)/PXL);gx<=Math.floor((x+R_)/PXL);gx++)if(Math.hypot((gx+.5)*PXL-x,(gy+.5)*PXL-y)<=R_)set.add(gx+','+gy)}
 function lightLayer(){if(!lpix){lpix=document.createElement('canvas');lpix.width=Math.ceil(AW/PXL);lpix.height=Math.ceil(AH/PXL);lpg=lpix.getContext('2d')}
  lpg.setTransform(1,0,0,1,0,0);lpg.clearRect(0,0,lpix.width,lpix.height);lpg.setTransform(1/PXL,0,0,1/PXL,0,0);return lpg}
+/* Pool balls roll: each keeps a rotation (b.rot, 3 x 3, ball frame to view) turned by how far it moved since the last frame, as if rolling on the
+   table without slipping. Stripes are the band around the ball's own y axis; number circles sit at both ends of its z axis. Drawing only. */
+const POOL_WHITE=(TH.page&&TH.page.chalk)||'#f6f0e4';
+function rollBall(b){
+ if(!b.rot){const a=Math.random()*TAU,c=Math.cos(a),s=Math.sin(a);b.rot=[c,-s,0,s,c,0,0,0,1];b._rx=b.x;b._ry=b.y;b._rn=0}
+ const dx=b.x-b._rx,dy=b.y-b._ry,d=Math.hypot(dx,dy);b._rx=b.x;b._ry=b.y;
+ if(d>1e-3&&d<b.r*3){const ax=-dy/d,ay=dx/d,t=d/b.r,c=Math.cos(t),s=Math.sin(t),k=1-c,R=b.rot;   // axis = z × v, angle = distance / radius
+  const M=[c+ax*ax*k,ax*ay*k,ay*s, ay*ax*k,c+ay*ay*k,-ax*s, -ay*s,ax*s,c],o=new Array(9);
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++)o[i*3+j]=M[i*3]*R[j]+M[i*3+1]*R[3+j]+M[i*3+2]*R[6+j];
+  if(++b._rn%60===0){for(let j=0;j<3;j++){let n=Math.hypot(o[j],o[3+j],o[6+j]);o[j]/=n;o[3+j]/=n;o[6+j]/=n}}   // keep it a rotation
+  b.rot=o}
+ return b.rot}
 function mixHex(a,b,t){const h=x=>{x=String(x);const r=/rgba?\(([^)]+)\)/.exec(x);if(r)return r[1].split(',').slice(0,3).map(Number);x=x.replace('#','');return[0,2,4].map(i=>parseInt(x.substr(i,2),16))},A=h(a),B=h(b);return'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
 function shades(col){return SHADES[col]||(SHADES[col]={dark:mixHex(col,'#140a1e',.45),mid:mixHex(col,'#140a1e',.18),base:col,lit:mixHex(col,'#ffffff',.3),band:mixHex(col,'#ffffff',.55)})}
 let lightPt=null,lightAt={x:-AW*.4,y:-AH*.6};   // lightPt: where the mouse is, in arena units; lightAt eases toward it
@@ -1120,10 +1202,10 @@ function drawTop(b,S){
  if(b.inv>0){ctx.lineWidth=2;ctx.strokeStyle=rgba(TH.page.gold,.8);ctx.setLineDash([4,4]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+4,0,TAU);ctx.stroke();ctx.setLineDash([])}
  if(OPT.showHpOnBalls===false||b.r<8)return;
  let fs=Math.max(7,b.r*.84)*DFS,tc=dark(b.col)?TH.page.chalk:TH.page.ink;
- if(b.kind==='eight'&&!im){ctx.beginPath();ctx.arc(b.x,b.y,b.r*.58,0,TAU);ctx.fillStyle=TH.page.chalk;ctx.fill();tc=b.col;fs=b.r*.5*DFS}
+ const outlined=!im&&(b.kind==='eight'||b.kind==='pool');if(outlined){tc=TH.page.chalk;fs=Math.max(7,b.r*.7)*DFS}   // pool balls: the circles roll, so the HP number gets an outline instead
  const s=fmt(b.hp);if(s.length>3)fs*=.72;
  ctx.font=fs+'px '+FONT_D;ctx.textAlign='center';ctx.textBaseline='middle';
- if(im){ctx.lineJoin='round';ctx.lineWidth=fs*.22;ctx.strokeStyle=INK;ctx.strokeText(s,b.x,b.y+fs*.07);ctx.fillStyle='#fff'}
+ if(im||outlined){ctx.lineJoin='round';ctx.lineWidth=fs*(outlined?.3:.22);ctx.strokeStyle=INK;ctx.strokeText(s,b.x,b.y+fs*.07);ctx.fillStyle='#fff'}
  else ctx.fillStyle=b.flash>0?TH.page.ink:tc;
  ctx.fillText(s,b.x,b.y+fs*.07);
 }

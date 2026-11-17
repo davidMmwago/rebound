@@ -8,7 +8,7 @@
     "You can delete a whole augment, enemy or boss to remove it from the game. Adding a new enemy or boss works from this file alone. Adding a new augment or trophy also needs code.",
     "Keys that start with an underscore are notes for humans and are ignored by the game."
   ],
-  "build": "20261117113815", "version": 18,
+  "build": "20261117175455", "version": 28,
 
   "rules": {
     "_note": "Distances are in arena units (the arena is 'arena.size' units wide). Speeds are units per second. Spin is radians per second (6.28 is one full turn a second).",
@@ -653,7 +653,7 @@
   "enemies": {
     "_note": "cost is how much of a fight's budget one of these uses. minTier is the first tier it can appear in. hp and damage numbers are tier 1 values and scale up. A weapon is { type, power, reach, spin }. Optional abilities: pack (comes in groups), bombDamage + bombRadius (explodes on death), splitsInto + splitCount, healPerSecond. 'about' is the hint shown on the fight preview. 'values' are the numbers its behaviour reads (core.js ENEMY_CODE). Every attack has a visible wind-up.",
     "grunt": { "name": "Grunt", "cost": 1, "minTier": 1, "hp": 30, "radius": 17, "speed": 158, "bodyDamage": 5, "armor": 0, "color": "#8d99ae", "weapons": [],
-      "about": "Rams you." },
+      "about": "Rams you.", "aboutEndless": "Rams you along a marked path." },
     "swarm": { "name": "Swarmling", "cost": 0.5, "minTier": 1, "pack": true, "hp": 9, "radius": 10, "speed": 225, "bodyDamage": 3, "armor": 0, "color": "#c77dff", "weapons": [],
       "about": "Packs move together.", "values": { "flock": 1.6, "flockRange": 90 } },
     "slasher": { "name": "Slasher", "cost": 2, "minTier": 1, "hp": 40, "radius": 19, "speed": 165, "bodyDamage": 0, "armor": 0, "color": "#ef476f",
@@ -682,7 +682,11 @@
       "about": "Rushes to shield hurt allies from you.", "values": { "gap": 6, "steer": 400, "turn": 1.6, "hurtPercent": 70 } },
     "crusher": { "name": "Crusher", "cost": 4, "minTier": 5, "hp": 66, "radius": 22, "speed": 135, "bodyDamage": 0, "armor": 0, "color": "#c8553d",
       "weapons": [ { "type": "hammer", "power": 14, "reach": 36, "spin": 2.9 } ],
-      "about": "Slams the floor around it. Leave the ring.", "values": { "every": 5, "warning": 0.7, "slamRadius": 60, "slamDamage": 10 } }
+      "about": "Slams the floor around it. Leave the ring.", "values": { "every": 5, "warning": 0.7, "slamRadius": 60, "slamDamage": 10 } },
+    "pool": { "name": "Pool Ball", "cost": 1, "minTier": 99, "hp": 8, "radius": 14, "speed": 150, "bodyDamage": 2, "armor": 0, "color": "#f2c230", "weapons": [],
+      "about": "The Eight Ball's balls. Big ones ram along a marked path.",
+      "_note": "Only The Eight Ball's racks (minTier 99 keeps it out of normal fights). All the same size and HP (tier scaling on top); big ones have bigRadiusX size and bigHpX HP and ram. Bumping your ball shoves it with solidImpact (1 to 7) or stripeImpact (9 to 15). Rams: every ramEvery seconds (first one after 0.5 to 1.5 times that) it stands still for ramWindup showing its path (ramBounces wall bounces), then charges at ramSpeed; a hit deals ramDamageMult x body damage and knocks with ramKnock. Ends after ramMaxSeconds. Rack: spacing, apex at rackX of the arena width, still for rackPause seconds. Grunts in endless mode ram with these numbers too, but every gruntRamEvery seconds and with gruntRamDamageMult.",
+      "values": { "solidImpact": 140, "stripeImpact": 300, "bigRadiusX": 1.6, "bigHpX": 3, "ramEvery": 4, "ramWindup": 0.8, "ramBounces": 3, "ramSpeed": 520, "ramDamageMult": 5, "ramKnock": 520, "ramMaxSeconds": 3, "gruntRamEvery": 7, "gruntRamDamageMult": 2, "rackSpacing": 48, "rackX": 0.42, "rackPause": 0.8 } }
   },
 
   "bosses": {
@@ -733,11 +737,13 @@
       "hp": 240, "radius": 33, "speed": 118, "bodyDamage": 6, "armor": 1, "color": "#b5835a",
       "weapons": [ { "type": "hammer", "power": 11, "reach": 46, "spin": 2.4 } ],
       "values": { "knockMult": 2.4, "hpPercent": 6, "window": 0.7, "slamEvery": 6, "slamWarning": 0.8, "slamRadius": 120, "slamDamage": 6, "slamKnock": 520 } },
-    "eight": { "name": "The Eight Ball", "rule": "The corners are pockets: enemies you knock in die at once.",
-      "phase2": "Faster, summons {guardCount} guards, and resists your most used damage type by {resistPercent}%.", "weak": ["Knockback", "Impact"], "resists": [],
-      "hp": 350, "radius": 38, "speed": 150, "bodyDamage": 4, "armor": 1, "color": "#14111a",
+    "eight": { "name": "The Eight Ball", "rule": "Invulnerable while its balls are alive. Knock balls into the pockets to execute them, but don't get knocked in yourself.",
+      "phase2": "Faster, and resists your most used damage type by {resistPercent}%.",
+      "_note": "rack 1: it starts with the 7 solids (enemies.pool) and is invulnerable while any of its balls lives. Solids cleared: it loses clearPercent of its Max HP (never dies from it) and the 7 stripes arrive, bigCount of them big and ramming. Then it is alone. Pockets: an enemy knocked in within pocketWindow dies; the Eight Ball itself only when alone, for bossPercent of its Max HP (never kills), then not again for bossCooldown seconds. Your ball knocked in: speed 0 for stallSeconds, back to full over climbSeconds.",
+      "weak": ["Knockback", "Impact"], "resists": [],
+      "hp": 350, "radius": 26, "speed": 150, "bodyDamage": 4, "armor": 1, "color": "#14111a",
       "weapons": [ { "type": "sword", "power": 5, "reach": 50, "spin": 3.2 }, { "type": "sword", "power": 5, "reach": 50, "spin": 3.2 } ],
-      "values": { "rageAtHpPercent": 50, "rageSpeedPercent": 130, "rageSpinPercent": 130, "guardCount": 2, "pocketRadius": 34, "pocketWindow": 1.2, "resistPercent": 40 }, "spawns": "slasher" }
+      "values": { "rageAtHpPercent": 50, "rageSpeedPercent": 130, "rageSpinPercent": 130, "bigCount": 2, "clearPercent": 25, "pocketRadius": 34, "pocketWindow": 1.2, "resistPercent": 40, "rack": 1, "bossPercent": 15, "bossCooldown": 3, "stallSeconds": 0.6, "climbSeconds": 1.5 } }
   },
   "bossPool": ["bulwark", "hydra", "reflect", "magnet", "nullb", "glacier", "queen", "furnace", "storm", "gavel"],
   "finalBoss": "eight",
@@ -763,7 +769,7 @@
     "augmentsTitle": "Augments", "augmentsHint": "{used}/{slots} · trigger top to bottom",
     "emptySocket": "Empty",
     "yourBall": "Your ball", "rampLabel": "Ramp", "rampResets": "Resets each fight.", "rampNothing": "none",
-    "statNames": { "hp": "Max HP", "power": "Power", "mult": "Mult", "crit": "Crit", "speed": "Speed", "spin": "Spin", "reach": "Reach", "armor": "Armor", "regen": "Regen", "knock": "Knockback", "impact": "Impact" },
+    "statNames": { "hp": "Max HP", "power": "Power", "mult": "Mult", "hit": "Next hit", "crit": "Crit", "speed": "Speed", "spin": "Spin", "reach": "Reach", "armor": "Armor", "regen": "Regen", "knock": "Knockback", "impact": "Impact" },
     "readoutPower": "Power", "readoutMult": "Mult", "readoutLast": "Last hit",
     "payoutTitle": "Payout", "payoutTotal": "Total",
     "payFightWon": "Fight won", "payBossBeaten": "Boss defeated", "payHpHigh": "HP above {percent}%", "payHpLow": "HP above {percent}%", "payJackpot": "Jackpot", "payInterest": "Interest",
@@ -793,12 +799,13 @@
     "tagTip": "Tags: the families this augment belongs to.",
     "tagsTitle": "Tags", "eventsTitle": "This fight", "capTip": "Cap: the most this stat can be. Past it the extra is overflow.",
     "noCap": "/∞", "statsAdded": "Stats added", "statsPerHit": "{v} {stat} per hit", "statsOnHits": "on {n}/{all} hits", "statsMax": "(max {v})", "statsGained": "gained {v} {stat}", "statsUpTo": "up to {v} {stat}", "statNamesExtra": { "blades": "Blades", "volley": "Volley", "critMult": "Crit multiplier", "size": "Size", "projBounce": "Projectile bounces", "bounceX": "Bounce count", "poisonX": "Poison damage", "burnX": "Burn damage", "frozenX": "Damage to Frozen" },
-    "armorCapTip": "Armor: flat damage taken off every hit you take. It never takes off more than {cap}% of one hit.", "armorCap": "max {cap}%", "armorNoCap": "no max",
+    "condTag": "conditional", "condNote": "(+{v}): extra when its conditional bonuses apply.", "baseLabel": "Base", "bossesBeaten": "Bosses beaten", "gainedFight": "this fight", "chilledLabel": "Chilled", "fistSpeedNote": "body hits, from Speed above base", "capLabel": "Cap", "cappedAt": "capped at {cap} ({over} over)", "adminLabel": "Admin", "multOrder": "+Mult adds first, then ×Mult multiplies, top socket to bottom.", "hitTip": "Power × Mult: what one hit deals before Crits and enemy Armor.", "condReasons": {"weaponHits": "weapon hits", "afterBounces": "after bounces", "afterContact": "after touching an enemy", "atArmorCap": "hits taken at the Armor Cap", "everyN": "every few hits", "thisFight": "grows each hit this fight", "moreReach": "Reach above your weapon's", "moreSpeed": "Speed above your weapon's", "mawEats": "eats the augment below at fight start", "overflow": "needs Overflow", "perBounce": "grows with bounces this fight", "perMini": "grows with Minis", "lowHp": "grows as your HP drops", "perCollision": "grows with Collisions this fight", "topEvent": "grows with your most frequent event", "bonusWeapon": "needs a bonus weapon", "perStatus": "grows with Statuses applied", "afterBounce": "just after a bounce", "combo": "hits in quick succession", "outnumbered": "while outnumbered", "perPoison": "Poison on the target", "perBurn": "Burn on the target", "knocked": "enemies knocked a moment ago", "frozen": "Frozen enemies", "farHits": "weapon hits far from your ball", "bossCrits": "Crits on bosses", "moreSize": "Size above normal", "goldHeld": "gold held", "perHit": "grows with hits this fight"},
+    "eightShielded": "Invulnerable", "armorCapTip": "Armor: flat damage taken off every hit you take. It never takes off more than {cap}% of one hit.", "armorCap": "max {cap}%", "armorNoCap": "no max",
     "viewShop": "Shop", "viewArena": "Warm-up",
     "eventNames": { "hits": "Hits", "bounces": "Bounces", "crits": "Crits", "collisions": "Collisions", "kills": "Kills" },
     "rampTip": "Your {weapon}: {ramp}. Gained during a fight, reset after it.",
     "multTip": "In a fight: the Mult your next hit gets right now, in socket order, against the nearest enemy. Crits not counted. In the shop: the Mult that applies to every hit.",
-    "sourceNames": { "weapon": "Weapon", "body": "Body hits", "proj": "Projectiles", "mini": "Minis", "miniyou": "Mini-Yous", "twin": "Your twin", "aoe": "Effects", "poison": "Poison", "burn": "Burn", "crit": "Crits", "ramp": "Ramp", "other": "Other", "lightning": "Lightning", "bomb": "Bombers", "pocket": "Pockets" }, "chainBest": "Best ×{n}", "chainRecord": "Record ×{n}", "jumpToCurrent": "Jump to current", "previewTag": "Preview", "previewTip": "Preview this fight", "previewCurrentTip": "Current fight"
+    "sourceNames": { "weapon": "Weapon", "body": "Body hits", "proj": "Projectiles", "mini": "Minis", "miniyou": "Mini-Yous", "twin": "Your twin", "aoe": "Effects", "poison": "Poison", "burn": "Burn", "crit": "Crits", "ramp": "Ramp", "other": "Other", "lightning": "Lightning", "bomb": "Bombers", "pocket": "Pockets", "rackclear": "Rack cleared" }, "chainBest": "Best ×{n}", "chainRecord": "Record ×{n}", "jumpToCurrent": "Jump to current", "previewTag": "Preview", "previewTip": "Preview this fight", "previewCurrentTip": "Current fight"
   },
 
 
@@ -855,6 +862,8 @@
     },
     "arena": { "floor": "#1f172d", "dots": "#f6f0e4", "dotsOpacity": 0.06, "outline": "#0e0a14", "bossOutline": "#ffd23f", "playerOutline": "#ffffff" },
     "balls": { "player": "#ffd23f", "mini": "#ffe9a3", "hut": "#c08552" },
+    "_poolBallsNote": "Colours of pool balls 1 to 7; 9 to 15 are the same colours as stripes.",
+    "poolBalls": ["#f2c230", "#2457d6", "#d83a3a", "#7b3fb0", "#f08a24", "#22984a", "#8a2a2a"],
     "_lightingNote": "Lighting. mode: 'full' (lights from the fight) or 'simple' (only the mouse light); players can switch it with the Lighting button. ambient: how dark the arena always is (0 = not at all). maxDim: the darkest lightning can make it. autoSimpleMs: if a frame takes longer than this for 3 seconds in full mode, the game switches to simple once. flashes: short lights from events (lightning = strikes from the sky, spark = other zaps, blast = big rings and explosions, glint = small rings, quake, impact = impact frames): color, intensity, radius (how far it reaches), height (lower = longer shadows), life in seconds, dim (how much it darkens everything else). glows: lights that follow things while they last (burning balls, frozen balls, warning marks). bossGlow: a boss that gives off light.",
     "lighting": { "mode": "full", "ambient": 0, "maxDim": 0.6, "autoSimpleMs": 14,
       "flashes": {
@@ -895,7 +904,7 @@
       "arenaFloor": null,
       "balls": {
         "player": null, "mini": null, "hut": null,
-        "grunt": null, "swarm": null, "slasher": null, "stabber": null, "lancer": null, "brute": null, "archer": null, "bomber": null, "splitter": null, "medic": null, "guard": null, "crusher": null,
+        "grunt": null, "swarm": null, "slasher": null, "stabber": null, "lancer": null, "brute": null, "archer": null, "bomber": null, "splitter": null, "medic": null, "guard": null, "crusher": null, "pool": null,
         "bulwark": null, "hydra": null, "reflect": null, "magnet": null, "nullb": null, "glacier": null, "queen": null, "furnace": null, "storm": null, "eight": null
       },
       "weapons": { "sword": "assets/weapons/weapon-sword.png", "dagger": "assets/weapons/weapon-dagger.png", "spear": "assets/weapons/weapon-spear.png", "hammer": "assets/weapons/weapon-hammer.png", "bow": "assets/weapons/weapon-bow.png", "shield": "assets/weapons/weapon-shield.png" },
@@ -904,7 +913,7 @@
       "sellBin": { "_note": "The needle that augments are dragged onto to sell them. 256 x 256, transparent. 'armed' shows while an augment is held over it; leave it null to use 'idle' for both.", "idle": null, "armed": null },
       "icons": {
         "_note": "Small pictures shown on cards. Add any augment, weapon, tune-up or trophy id, for example \"whet\": \"assets/icons/whet.png\".",
-        "augments": { "rubber": "assets/icons/augments/rubber.png", "mirror": "assets/icons/augments/mirror.png", "pinball": "assets/icons/augments/pinball.png", "glass": "assets/icons/augments/glass.png", "gyro": "assets/icons/augments/gyro.png" },
+        "augments": { "rubber": "assets/icons/augments/rubber.png", "mirror": "assets/icons/augments/mirror.png", "pinball": "assets/icons/augments/pinball.png", "glass": "assets/icons/augments/glass.png", "gyro": "assets/icons/augments/gyro.png", "corner": "assets/icons/augments/corner.png", "wind": "assets/icons/augments/wind.png", "battering": "assets/icons/augments/battering.png", "adrenaline": "assets/icons/augments/adrenaline.png" },
         "weapons": { "sword": "assets/weapons/icon-sword.png", "daggers": "assets/weapons/icon-daggers.png", "spear": "assets/weapons/icon-spear.png", "hammer": "assets/weapons/icon-hammer.png", "bow": "assets/weapons/icon-bow.png", "fists": "assets/weapons/icon-fists.png" },
         "tuneUps": {}, "trophies": {}
       }

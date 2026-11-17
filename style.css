@@ -390,3 +390,9 @@ html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border
 .sheet.market{width:min(100%,560px)}
 .sheet.market h2{color:var(--c5,#c39bff)}
 .sheet.market .offers{display:flex;flex-direction:column;gap:10px}
+/* stat display: the bonus from conditional augments beside a stat, and multi-line hover lists */
+.stats dd .cb{font-style:normal;font-size:var(--bfs,13.333px);color:var(--gold);margin-left:3px}
+#tip{white-space:pre-line;max-width:320px}
+.stats.livegrid .sd{display:inline-flex;flex-direction:column;align-self:center;line-height:1;gap:1px}
+.stats.livegrid .sd .cb{margin-left:0}
+.adm-row select{font:inherit;font-size:var(--bfs,13.333px);color:var(--chalk);background:var(--ink);border:2px solid var(--drop);border-radius:8px;padding:4px 7px}

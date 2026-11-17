@@ -75,14 +75,42 @@ function mkBall(o){const b=Object.assign({id:++UID,x:AW/2,y:AH/2,vx:0,vy:0,r:18,
 function launch(S,b){const a=rnd(S.rsrc)*TAU;b.vx=Math.cos(a)*b.spd;b.vy=Math.sin(a)*b.spd}
 
 /* ---------- 2. enemies and bosses ---------- */
-function unitFromData(d){return{about:d.about||'',name:d.name,cost:d.cost,min:d.minTier,minT:d.minTier||1,pack:!!d.pack,hp:d.hp,r:d.radius,spd:d.speed,body:d.bodyDamage||0,armor:d.armor||0,col:d.color,
+function unitFromData(d){return{about:d.about||'',aboutEndless:d.aboutEndless||'',name:d.name,cost:d.cost,min:d.minTier,minT:d.minTier||1,pack:!!d.pack,hp:d.hp,r:d.radius,spd:d.speed,body:d.bodyDamage||0,armor:d.armor||0,col:d.color,
  w:(d.weapons||[]).map(w=>[w.type,w.power,w.reach,w.spin,w.fireEvery]),bomb:d.bombDamage||0,bombR:d.bombRadius||85,split:d.splitsInto||null,splitN:d.splitCount||2,heal:d.healPerSecond||0,spawns:d.spawns||null,v:d.values||{}}}
 const ENEMY={};
 for(const k of dkeys(DATA.enemies))ENEMY[k]=unitFromData(DATA.enemies[k]);
 /* Enemy behaviours, by enemy id (added with boss and enemy draft 1). tick(S,b,dt,v) every step, onWall(S,b,v) when it hits a wall. v is the enemy's
    "values" in the data. Every attack has a visible wind-up: b.tele (seconds of a flash, drawn by ui.js) and b.pause (stands still). */
 const towards=(b,t,spd)=>{const dx=t.x-b.x,dy=t.y-b.y,d=Math.hypot(dx,dy)||1;b.vx=dx/d*spd;b.vy=dy/d*spd};
+/* Rams (pool balls in The Eight Ball's rack, and Grunts in endless mode). Numbers: enemies.pool.values. A ram winds up (standing still, flashing)
+   while its path shows: a straight line toward you that bounces off walls ramBounces times (b.ramPts). Then it charges along it at ramSpeed with no
+   wall jitter, so it follows the line unless something gets in the way. Hitting your side while ramming deals ×ramDamageMult body damage and
+   knocks hard (ramKnock), which marks your ball as knocked (pockets). The ram ends at the last bounce, on a hit, or after ramMaxSeconds. */
+const RAMV=()=>ENEMY.pool?ENEMY.pool.v:null;
+function ramTrace(b,dx,dy,n){let x=b.x,y=b.y;const r=b.r,pts=[[x,y]];
+ for(let k=0;k<n;k++){let t=Infinity;if(dx>1e-6)t=Math.min(t,(AW-r-x)/dx);if(dx<-1e-6)t=Math.min(t,(r-x)/dx);if(dy>1e-6)t=Math.min(t,(AH-r-y)/dy);if(dy<-1e-6)t=Math.min(t,(r-y)/dy);
+  if(!isFinite(t))break;t=Math.max(0,t);x+=dx*t;y+=dy*t;pts.push([x,y]);if(x<=r+.01||x>=AW-r-.01)dx=-dx;if(y<=r+.01||y>=AH-r-.01)dy=-dy}
+ return pts}
+/* A ball stalled by a pocket: 0 for PK.stall seconds, then climbs back to 1 over PK.climb seconds. */
+function stallF(S,b){if(b.stall==null||!S.pockets)return 1;const k=S.t-b.stall,P=S.pockets;if(k<P.stall)return 0;const f=(k-P.stall)/P.climb;if(f>=1){b.stall=null;return 1}return f}
+function endRam(b){b.ram=null;b.wind=0;b.ramPts=null;b.dashT=0}
+function ramTick(S,b,dt,v,freq){
+ if(b.frozen>0||b.stun>0){if(b.ram||b.wind)endRam(b);return}
+ if(b.ram){b.ram.t+=dt;if(b.ram.t>v.ramMaxSeconds)endRam(b);return}
+ if(b.wind){if(b.pause>0)return;b.wind=0;b.ramPts=ramTrace(b,b.ramDir[0],b.ramDir[1],v.ramBounces);   // released: retrace from where it stands now
+  const sp=v.ramSpeed*(b.angry?v.angrySpeedPercent/100:1);b.vx=b.ramDir[0]*sp;b.vy=b.ramDir[1]*sp;b.dashT=99;b.dashX=sp/Math.max(1,b.spd);b.ram={n:0,t:0};return}
+ b.ait=(b.ait==null?(.5-rnd(S.rsrc))*v.ramEvery:b.ait)+dt*(freq||1);   // first ram after 0.5 to 1.5 times ramEvery, so the rack doesn't all charge at once
+ if(b.ait>=v.ramEvery&&S.player.alive){b.ait=0;const p=S.player,dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy)||1;b.ramDir=[dx/d,dy/d];b.ramPts=ramTrace(b,dx/d,dy/d,v.ramBounces);
+  b.wind=1;b.pause=v.ramWindup;b.tele=v.ramWindup}}
+/* One of The Eight Ball's pool balls: n 1 to 7 solid, 9 to 15 striped. All the same size and HP; big ones (bigRadiusX, bigHpX) ram along
+   marked paths. Bumping your ball shoves it with solidImpact or stripeImpact (and marks it as knocked, for the pockets). */
+function poolBall(S,n,x,y,big){const P=ENEMY.pool,pv=P.v,cols=DATA.theme.poolBalls||['#f2c230','#2457d6','#d83a3a','#7b3fb0','#f08a24','#22984a','#8a2a2a'];
+ const e=spawnEnemy(S,'pool',x,y,{hp:P.hp*S.hs*(big?pv.bigHpX:1),r:P.r*(big?pv.bigRadiusX:1)});e.num=n;e.stripe=n>8;e.col=cols[(n>8?n-9:n-1)%cols.length];
+ e.impact=e.stripe?pv.stripeImpact:pv.solidImpact;e.big=!!big;e.vx=e.vy=0;e.pause=pv.rackPause;if(big)e.m=e.r*e.r/324;return e}
+function ramWall(S,b,v){if(b.ram&&++b.ram.n>=v.ramBounces)endRam(b)}
 const ENEMY_CODE={
+ pool:{tick(S,b,dt,v){if(b.big)ramTick(S,b,dt,v,1)},onWall(S,b,v){ramWall(S,b,v)}},
+ grunt:{tick(S,b,dt){const v=RAMV();if(S.endlessFight&&v)ramTick(S,b,dt,v,v.ramEvery/(v.gruntRamEvery||v.ramEvery))},onWall(S,b){if(RAMV())ramWall(S,b,RAMV())}},   // endless mode: Grunts ram along marked paths
  swarm:{tick(S,b,dt,v){let x=0,y=0,n=0;for(const o of S.balls)if(o!==b&&o.alive&&o.kind==='swarm'&&Math.abs(o.x-b.x)<v.flockRange&&Math.abs(o.y-b.y)<v.flockRange){x+=o.x;y+=o.y;n++}
   if(n){b.vx+=(x/n-b.x)*v.flock*dt;b.vy+=(y/n-b.y)*v.flock*dt}}},
  slasher:{tick(S,b,dt,v){if(b.pause>0||b.frozen>0||b.stun>0)return;b.ait=(b.ait||0)+dt;
@@ -168,10 +196,24 @@ const BOSS_CODE={
    text(S,p.x,p.y-p.r,d,'hurt');fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+22,col:DATA.theme.page.mult});snd(S,'impact');count(S,'hurt');if(p.hp<=0)playerDown(S)},
   phase2(S,b,v){b.slt=v.slamEvery-1},tick(S,b,dt,v){if(!b.p2||b.frozen>0)return;b.slt+=dt;if(b.slt<v.slamEvery)return;b.slt=0;b.pause=v.slamWarning;b.tele=v.slamWarning;
    S.marks.push({x:b.x,y:b.y,r:v.slamRadius,t:v.slamWarning,t0:v.slamWarning,pow:v.slamDamage*S.ds,knock:v.slamKnock,src:b})}},
- eight:{onSpawn(S,b,v){S.pockets={r:v.pocketRadius,window:v.pocketWindow};b.dmgT={}},
+ /* The Eight Ball: invulnerable while any of its balls live. It racks with the 7 solids; clearing them costs it clearPercent of its Max HP and the
+    7 stripes arrive (bigCount of them big, ramming along marked paths). Once they are gone it is alone, and can be pocketed. */
+ eight:{onSpawn(S,b,v){S.pockets={r:v.pocketRadius,window:v.pocketWindow,bossPercent:v.bossPercent,bossCooldown:v.bossCooldown,stall:v.stallSeconds,climb:v.climbSeconds};b.dmgT={};b.phase='alone';
+   if(!v.rack||!ENEMY.pool)return;b.phase='solids';
+   const pv=ENEMY.pool.v,d=pv.rackSpacing,ax=AW*pv.rackX,rows=[[1],[2,3],[4,8,5],[6,7]];   // the solids' rack, apex toward you, the Eight Ball in the middle
+   rows.forEach((row,i)=>row.forEach((n,j)=>{const x=ax+i*d*.866,y=AH/2+(j-(row.length-1)/2)*d;if(n===8){b.x=x;b.y=y;b.vx=b.vy=0;b.pause=pv.rackPause}else poolBall(S,n,x,y,false)}))},
   taken(S,b,amt,kind,type,v){if(!b.rage){b.dmgT[type]=(b.dmgT[type]||0)+amt;return amt}return type===b.resist?amt*(1-v.resistPercent/100):amt},
-  tick(S,b,dt,v){if(!b.rage&&b.hp<b.maxhp*v.rageAtHpPercent/100){b.rage=1;b.spd*=v.rageSpeedPercent/100;for(const w of b.ws)w.spin*=v.rageSpinPercent/100;
-   if(b.def.spawns)for(let i=0;i<v.guardCount;i++)spawnEnemy(S,b.def.spawns,b.x+(i%2?40:-40),b.y+(i>1?30:0));fx(S,{k:'ring',x:b.x,y:b.y,r:120,col:DATA.theme.page.mult});
+  tick(S,b,dt,v){
+   const allies=S.balls.some(e=>e.alive&&e.team===1&&!e.boss);
+   if(allies){b.inv=Math.max(b.inv||0,.1);b.ward=S.t+.1;S.bossNote=DATA.text.eightShielded||'Invulnerable'}   // shielded while its balls live
+   else if(b.phase==='solids'){b.phase='stripes';S.bossNote='';b.inv=0;b.ward=0;   // rack cleared: it loses a share of Max HP and the stripes arrive
+    const amt=Math.min(b.maxhp*v.clearPercent/100,b.hp-1),ar=b.armor;b.armor=0;S.hitKey='src:rackclear';damage(S,b,amt,'aoe');S.hitKey=null;b.armor=ar;fx(S,{k:'ring',x:b.x,y:b.y,r:110,col:DATA.theme.page.gold});snd(S,'impact');
+    const pv=ENEMY.pool.v,d=pv.rackSpacing,left=S.player.x>AW/2,ax=left?AW*(1-pv.rackX)-30:AW*pv.rackX+30,rows=[[9],[10,11],[12,13,14,15]],big=[];
+    const nums=[9,10,11,12,13,14,15];while(big.length<v.bigCount&&nums.length)big.push(nums.splice(rnd(S.rsrc)*nums.length|0,1)[0]);
+    rows.forEach((row,i)=>row.forEach((n,j)=>{const x=clamp(ax+(left?-1:1)*i*d*.866,30,AW-30),y=AH/2+(j-(row.length-1)/2)*d,e=poolBall(S,n,x,y,big.includes(n));fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+12,col:e.col})}))}
+   else if(b.phase==='stripes'){b.phase='alone';S.bossNote=''}
+   if(!b.rage&&b.hp<b.maxhp*v.rageAtHpPercent/100){b.rage=1;b.spd*=v.rageSpeedPercent/100;for(const w of b.ws)w.spin*=v.rageSpinPercent/100;
+   fx(S,{k:'ring',x:b.x,y:b.y,r:120,col:DATA.theme.page.mult});
    let best=null;for(const k in b.dmgT)if(!best||b.dmgT[k]>b.dmgT[best])best=k;b.resist=best;if(best)S.bossNote=tpl(DATA.text.resisting||'Resists {type}',{type:(DATA.text.damageTypes||{})[best]||best})}}},
 };
 const BOSS={};
@@ -466,47 +508,84 @@ const AUG_CODE={
  seep:{stats(a,S,P,v){P.dotMult=Math.max(P.dotMult||0,v.percent/100)}},
  mass:{preHit(a,S,c,v){S.ramp.crit+=v.percent/100;S.ramp.critOver=v.critMultPerOverflow}},
 };
-/* The Mult shown under stats: every ×Mult and +Mult that applies to every hit, worked out in socket order like a real hit (showMult hooks,
-   run through fire() so Mirror Ball, Resonator and switched-off sockets count). x.m is the Mult so far; x.live is true in a fight, where the ones
-   that grow during a fight (Kinetic Battery, Hive Mind, Eight-Ball Rack, Singularity, Berserker) count too. Effects with a condition (Bank Shot,
-   Combo Meter, Neurotoxin, Sweet Spot...) are left out: they do not apply to every hit. */
+/* ---------- what the Your ball card shows (stat view) ----------
+   Three hooks, run through fire() like a real hit so socket order, Mirror Ball, Resonator, Echoing Void and switched-off sockets all count:
+   showPow (Power a hit gets on top of your Power stat), showMult (the +Mult and ×Mult, in socket order), showCrit.
+   x.live: in a fight (timers and counters read live; the target is the nearest enemy, x.tgt). x.all: the second pass that assumes every conditional
+   bonus with a fixed value applies, for the \"(+x)\" beside a stat. x.lines (first pass only): one line per source for the stat's hover list.
+   A hook passes cond = a short reason when its bonus is not applying right now; val null means it has no fixed value (it grows in a fight). */
+function shNote(x,stat,txt,cond){if(x.lines)x.lines.push({stat,key:x._key,id:x._id,txt,cond:cond||''})}
+function shm(x,op,val,cond,txt){if(val!=null&&(!cond||x.all)){if(op==='+')x.m+=val;else x.m*=val}shNote(x,'mult',txt||(op==='+'?'+'+f1(val)+' Mult':'×'+f1(val)+' Mult'),cond)}
+function shp(x,val,cond,txt){if(val!=null&&(!cond||x.all))x.p+=val;shNote(x,'pow',txt||'+'+f1(Math.round(val*10)/10)+' Power',cond)}
+const TXC=k=>(DATA.text.condReasons||{})[k]||k;   // short reasons, data text.condReasons
+const SHOW_POW={
+ heavy(a,S,x,v){shp(x,S.player.maxhp/v.hpPer)},
+ momentum(a,S,x,v){shp(x,S.player.spd/v.speedPer)},
+ centri(a,S,x,v){const w=S.player.ws[0];if(w&&w.spin>0)shp(x,Math.min(v.max,w.spin*v.power))},
+ pike(a,S,x,v){const w=S.player.ws[0];if(w&&w.len>0)shp(x,w.len/v.reachPer,TXC('weaponHits'))},
+ rubber(a,S,x,v){if(x.live&&a.f.c)shp(x,v.power*a.f.c);else shp(x,null,TXC('afterBounces'),'+'+f1(v.power)+' Power per bounce, max +'+f1(v.power*v.max))},
+ bumper(a,S,x,v){if(x.live&&a.f.p)shp(x,a.f.p);else shp(x,v.power,TXC('afterContact'))},
+ bastion(a,S,x,v){if(!x.live)shp(x,null,TXC('atArmorCap'),'+'+f1(v.power)+' Power per hit taken, max +'+f1(v.maxPower))},
+ tagteam(a,S,x,v){const k=a.f.k||0;if(k){x.pinc+=v.percent/100*k;shNote(x,'pow','+'+f1(v.percent*k)+'% Power')}},
+ specialist(a,S,x,v){const k=a.f.k||0;if(k){x.pinc+=v.percent/100*k;shNote(x,'pow','+'+f1(v.percent*k)+'% Power')}},
+};
+const SHOW_CRIT={
+ dice(a,S,x,v){if(x.live&&(S.hitCount+1)%v.every===0){x.c=Math.max(x.c,1);shNote(x,'crit','100% (this hit)')}else shNote(x,'crit','100% every '+v.every+' hits',TXC('everyN'))},
+ mass(a,S,x,v){if(!x.live)shNote(x,'crit','+'+f1(v.percent)+'% Crit per hit',TXC('thisFight'))},
+};
 const SHOW_MULT={
- glass(a,S,x,v){x.m*=v.mult},
- horizon(a,S,x,v){const w=S.player.ws[0];if(w)x.m*=1+v.mult*Math.max(0,w.len-S.P.W.reach)/v.reachPer},
- terminal(a,S,x,v){x.m*=1+v.mult*Math.max(0,S.player.spd+S.over.spd-S.P.W.spd)/v.speedPer},
- colossus(a,S,x,v){x.m*=1+v.mult*S.player.maxhp/v.hpPer},
- maw(a,S,x){if(a.n)x.m*=1+a.n},
- bloom(a,S,x){if(a.n)x.m+=a.n},
- overclock(a,S,x,v){const CB=RULES.combat,o=S.over.spd/CB.maxPlayerSpeed+S.over.spin/CB.maxSpin+S.P.over.blades/4;if(o>0)x.m+=v.mult*o*10},
- battery(a,S,x){if(x.live&&a.f.m)x.m+=a.f.m},
- hive(a,S,x,v){if(x.live){const n=minis(S);if(n)x.m+=v.mult*n}},
- bers(a,S,x,v){if(!x.live)return;const p=S.player,m=1+(v.maxMult-1)*(1-p.hp/p.maxhp);if(m>1.02)x.m*=m},
- rack(a,S,x,v){if(!x.live)return;const n=(S.count.collisions||0)+(S.count.enemyCollisions||0);if(n)x.m*=Math.pow(v.mult,n)},
- singularity(a,S,x,v){if(!x.live)return;const k=Math.floor(topEvent(S)/10);if(k)x.m*=Math.pow(v.mult,k)},
- ambi(a,S,x,v){if(S.P.blades>S.P.W.blades)x.m*=v.mult},
- converge(a,S,x,v){if(!x.live)return;const n=statusesApplied(S);if(n)x.m*=1+v.per*n},
- /* Conditional ones count in a fight when they would apply to your next hit right now: timing from this moment, the target is the nearest enemy (x.tgt). */
- corner(a,S,x,v){if(x.live&&S.t-S.lastBounce<v.window)x.m*=v.mult},
- combo(a,S,x,v){if(x.live&&a.f.t!=null&&S.t-a.f.t<v.window)x.m+=(a.f.m||0)+v.mult},
- under(a,S,x,v){if(x.live&&enemies(S).length>1+minis(S))x.m*=v.mult},
- neuro(a,S,x,v){const t=x.tgt;if(t&&t.poison>0)x.m+=v.mult*t.poison},
- fuel(a,S,x,v){const t=x.tgt;if(t&&t.burn>0)x.m+=v.mult*t.burn},
- followthrough(a,S,x,v){const t=x.tgt;if(!t)return;const own=!x.dot&&(S.P.W.fist?S.P.impact>0:S.P.kb>0);if(own||(t.knockT!=null&&S.t-t.knockT<v.window))x.m+=v.mult},   // your weapon hit (or Fists' bump with Impact) knocks the enemy just before it lands
- shatter(a,S,x,v){const t=x.tgt;if(t&&t.frozen>0)x.m*=v.mult},
+ glass(a,S,x,v){shm(x,'×',v.mult)},
+ horizon(a,S,x,v){const w=S.player.ws[0];if(!w)return;const m=1+v.mult*Math.max(0,w.len-S.P.W.reach)/v.reachPer;if(m>1.0001)shm(x,'×',m);else shm(x,'×',null,TXC('moreReach'),'+'+f1(v.mult)+' ×Mult per '+v.reachPer+' Reach')},
+ terminal(a,S,x,v){const m=1+v.mult*Math.max(0,S.player.spd+S.over.spd-S.P.W.spd)/v.speedPer;if(m>1.0001)shm(x,'×',m);else shm(x,'×',null,TXC('moreSpeed'),'+'+f1(v.mult)+' ×Mult per '+v.speedPer+' Speed')},
+ colossus(a,S,x,v){shm(x,'×',1+v.mult*S.player.maxhp/v.hpPer)},
+ maw(a,S,x){if(a.n)shm(x,'×',1+a.n);else shm(x,'×',null,TXC('mawEats'),'×1 Mult')},
+ bloom(a,S,x){if(a.n)shm(x,'+',a.n)},
+ overclock(a,S,x,v){const CB=RULES.combat,o=S.over.spd/CB.maxPlayerSpeed+S.over.spin/CB.maxSpin+S.P.over.blades/4;if(o>0)shm(x,'+',v.mult*o*10);else shm(x,'+',null,TXC('overflow'),'+'+f1(v.mult)+' Mult per 10% Overflow')},
+ battery(a,S,x,v){if(x.live&&a.f.m)shm(x,'+',a.f.m);else shm(x,'+',null,TXC('perBounce'),'+'+f1(v.mult)+' Mult per bounce')},
+ hive(a,S,x,v){const n=x.live?minis(S):0;if(n)shm(x,'+',v.mult*n);else shm(x,'+',null,TXC('perMini'),'+'+f1(v.mult)+' Mult per Mini')},
+ bers(a,S,x,v){const p=S.player,m=1+(v.maxMult-1)*(1-p.hp/p.maxhp);if(x.live&&m>1.02)shm(x,'×',m);else shm(x,'×',null,TXC('lowHp'),'up to ×'+f1(v.maxMult)+' Mult')},
+ rack(a,S,x,v){const n=x.live?(S.count.collisions||0)+(S.count.enemyCollisions||0):0;if(n)shm(x,'×',Math.pow(v.mult,n));else shm(x,'×',null,TXC('perCollision'),'×'+f1(v.mult)+' Mult per Collision')},
+ singularity(a,S,x,v){const k=x.live?Math.floor(topEvent(S)/10):0;if(k)shm(x,'×',Math.pow(v.mult,k));else shm(x,'×',null,TXC('topEvent'),'×'+f1(v.mult)+' Mult per 10 events')},
+ ambi(a,S,x,v){if(S.P.blades>S.P.W.blades)shm(x,'×',v.mult);else shm(x,'×',v.mult,TXC('bonusWeapon'))},
+ converge(a,S,x,v){const n=x.live?statusesApplied(S):0;if(n)shm(x,'×',1+v.per*n);else shm(x,'×',null,TXC('perStatus'),'+'+f1(v.per)+' ×Mult per Status')},
+ corner(a,S,x,v){if(x.live&&S.t-S.lastBounce<v.window)shm(x,'×',v.mult);else shm(x,'×',v.mult,TXC('afterBounce'))},
+ combo(a,S,x,v){if(x.live&&a.f.t!=null&&S.t-a.f.t<v.window)shm(x,'+',(a.f.m||0)+v.mult);else shm(x,'+',null,TXC('combo'),'+'+f1(v.mult)+' Mult per hit in a combo')},
+ under(a,S,x,v){if(x.live&&enemies(S).length>1+minis(S))shm(x,'×',v.mult);else shm(x,'×',v.mult,TXC('outnumbered'))},
+ neuro(a,S,x,v){const t=x.tgt;if(t&&t.poison>0)shm(x,'+',v.mult*t.poison);else shm(x,'+',null,TXC('perPoison'),'+'+f1(v.mult)+' Mult per Poison on the target')},
+ fuel(a,S,x,v){const t=x.tgt;if(t&&t.burn>0)shm(x,'+',v.mult*t.burn);else shm(x,'+',null,TXC('perBurn'),'+'+f1(v.mult)+' Mult per Burn on the target')},
+ followthrough(a,S,x,v){const t=x.tgt,own=!x.dot&&(S.P.W.fist?S.P.impact>0:S.P.kb>0);if(own||(t&&t.knockT!=null&&S.t-t.knockT<v.window))shm(x,'+',v.mult);else shm(x,'+',v.mult,TXC('knocked'))},   // your weapon hit (or Fists' bump with Impact) knocks the enemy just before it lands
+ shatter(a,S,x,v){const t=x.tgt;if(t&&t.frozen>0)shm(x,'×',v.mult);else shm(x,'×',v.mult,TXC('frozen'))},
+ sweetspot(a,S,x,v){shm(x,'×',v.mult,TXC('farHits'))},
+ exec(a,S,x,v){shm(x,'×',v.bossMult,TXC('bossCrits'))},
+ vglut(a,S,x,v){const r=S.player.r||S.P.size,m=1+v.mult*Math.max(0,r/RULES.player.radius-1)*10;if(m>1.001)shm(x,'×',m);else shm(x,'×',null,TXC('moreSize'),'+'+f1(v.mult)+' ×Mult per 10% Size')},
+ vgold(a,S,x,v){if(S.run.gold>0)shm(x,'×',1+v.per*S.run.gold);else shm(x,'×',null,TXC('goldHeld'),'+'+f1(v.per)+' ×Mult per $1')},
+ vpull(a,S,x,v){shm(x,'×',v.mult)},
+ vbleed(a,S,x,v){const k=x.live?a.f.k||0:0;if(k)shm(x,'×',1+v.mult*k);else shm(x,'×',null,TXC('perHit'),'+'+f1(v.mult)+' ×Mult per hit')},
 };
 /* Your Mult on one enemy for damage over time (Seeping Wounds): like shownMult, but no Fists Speed factor and no knock from a weapon hit (x.dot). */
 function dotMult(S,e){const x={m:S.P.mult+S.ramp.mult+(OVF_ON?overflowMult(S):0),live:true,tgt:e,dot:true};fire(S,'showMult',x);return x.m}
 /* The Mult shown in a fight: what your next hit would get right now (crits aside), against the nearest enemy. */
-function shownMult(S){const x={m:(S.P.mult+S.ramp.mult+(OVF_ON?overflowMult(S):0))*(S.P.W.fist&&S.player&&S.P.spd>0?Math.max(1,S.player.spd/S.P.spd):1),live:true,   // Fists: body hits scale with Speed above base
- tgt:S.player&&S.player.alive?nearestEnemy(S):null};fire(S,'showMult',x);return x.m}
-function shopMult(run){const P=calcPlayer(run,null),CB=RULES.combat;
- const S={run,P,player:{maxhp:P.hp,hp:P.hp,spd:P.spd,ws:[{len:P.reach,spin:P.spin}]},over:{spd:Math.max(0,P.raw.spd-CB.maxPlayerSpeed),spin:Math.max(0,P.raw.spin-CB.maxSpin)},count:{},balls:[],src:null,cur:null,ramp:{mult:0}};
- const x={m:P.mult,live:false};fire(S,'showMult',x);return x.m}
+function shownMult(S){return statView(S).mult}
+/* A stand-in fight state for the shop, so the same hooks can be read outside a fight. */
+function shopState(run){const P=calcPlayer(run,null),CB=RULES.combat;
+ return{run,P,player:{maxhp:P.hp,hp:P.hp,spd:P.spd,r:P.size,ws:P.W.fist||P.noWeapon?[]:[{len:P.reach,spin:P.spin}]},over:{spd:Math.max(0,P.raw.spd-CB.maxPlayerSpeed),spin:Math.max(0,P.raw.spin-CB.maxSpin)},
+  count:{},balls:[],src:null,cur:null,t:0,lastBounce:-9,hitCount:0,ramp:{pow:0,mult:0,crit:0,spd:0,spin:1,reach:0,arrows:0}}}
+function shopMult(run){return statView(shopState(run)).mult}
+/* The stat view. S is a fight (live) or shopState(run). Returns the main numbers (what your next hit gets now; in the shop, every always-on bonus),
+   the extra if every fixed-value conditional bonus applied (powB, multB, hitB, critB) and, with withLines, the source lines of Power, Mult and Crit. */
+function statView(S,withLines){
+ const P=S.P,R=S.ramp,live=!!(S.balls&&S.balls.length&&S.player&&S.player.team===0&&S.player.alive);
+ const fist=live&&P.W.fist&&P.spd>0?Math.max(1,S.player.spd/P.spd):1,tgt=live?nearestEnemy(S):null,lines=withLines?[]:null;
+ const pass=all=>{const x={p:P.pow+(R.pow||0),pinc:0,m:(P.mult+(R.mult||0)+(OVF_ON&&S.over?overflowMult(S):0))*fist,c:P.crit+(R.crit||0),live,tgt,all,lines:all?null:lines};
+  fire(S,'showPow',x);fire(S,'showMult',x);fire(S,'showCrit',x);x.p*=1+x.pinc;return x};
+ const a=pass(false),b=pass(true);
+ return{pow:a.p,powB:b.p-a.p,mult:a.m,multB:b.m-a.m,hit:a.p*a.m,hitB:b.p*b.m-a.p*a.m,crit:Math.min(1,a.c),fist,lines,live}
+}
 const RAR=DATA.rarities.map(r=>r.name),COST=DATA.rarities.map(r=>r.cost);
 const AUG={};
 for(const id of dkeys(DATA.augments)){const d=DATA.augments[id];
  if(!AUG_CODE[id])CORE_PROBLEMS.push('augments.'+id+' is in game-data.json but has no code in core.js (AUG_CODE). A new augment needs code as well as data.');
- AUG[id]=Object.assign({id,name:d.name,rar:Math.max(0,RAR.indexOf(d.rarity)),tags:d.tags||[],desc:tpl(d.text,d.values),v:d.values||{}},AUG_CODE[id]||{});if(SHOW_MULT[id])AUG[id].showMult=SHOW_MULT[id]}
+ AUG[id]=Object.assign({id,name:d.name,rar:Math.max(0,RAR.indexOf(d.rarity)),tags:d.tags||[],desc:tpl(d.text,d.values),v:d.values||{}},AUG_CODE[id]||{});if(SHOW_MULT[id])AUG[id].showMult=SHOW_MULT[id];if(SHOW_POW[id])AUG[id].showPow=SHOW_POW[id];if(SHOW_CRIT[id])AUG[id].showCrit=SHOW_CRIT[id]}
 
 const TUNE={},TUNE_IDS=['hp','pow','spd','spin','reach','armor','crit','regen','knock','impact','mini'];
 /* The eleven fixed ids, then any cap tune-ups (an entry with "cap": spd, spin, blades, volley or armor). */
@@ -586,9 +665,9 @@ function fire(S,hook,x){
  const track=(hook==='stats'||hook==='preHit'||hook==='onHit')&&x&&x.inc,st_=hook==='stats';
  /* call: runs one hook, notes how much it raised the damage of this hit (or of every hit, for stats) in x.bst, and counts triggers (S.trig).
     These feed the damage breakdown after a fight. key is the id shown there: Mirror Ball and Resonator get the credit for what they copy or repeat. */
- const hitRec=(hook==='preHit'||hook==='onHit')&&x&&x.inc&&S.hitStat,dynRec=S.dynStat&&hook!=='stats'&&hook!=='showMult';
+ const hitRec=(hook==='preHit'||hook==='onHit')&&x&&x.inc&&S.hitStat,dynRec=S.dynStat&&hook!=='stats'&&!/^show/.test(hook);
  if(hook==='onHit'&&S.hitStat)S.hookHits=(S.hookHits||0)+1;   // hits that ran On hit effects, for "on 23/60 hits"
- const call=(key,def,fn,st,v)=>{S.cur=def;const e0=track?boostEff(x,st_):0,s0=st_&&x.log?statSnap(x):null;
+ const call=(key,def,fn,st,v)=>{S.cur=def;if(x&&x.lines!==undefined){x._key=key;x._id=def.id}const e0=track?boostEff(x,st_):0,s0=st_&&x.log?statSnap(x):null;
   const p0=hitRec?layerVal(x,'power'):0,m0=hitRec?layerVal(x,'mult'):0,d0=dynRec?dynOpen(S):null,ok=fn(st,S,x,v);
   if(s0)statDiff(x,key,s0);
   if(hitRec){const dp=layerVal(x,'power')-p0,m1=layerVal(x,'mult'),dm=m1-m0;if(Math.abs(dp)>1e-9||Math.abs(dm)>1e-9){const r=S.hitStat[key]||(S.hitStat[key]={n:0,dp:0,dpMax:0,dm:0,dmMax:0,lr:0,rMax:1});
@@ -691,7 +770,7 @@ function newFight(run,o){
   ramp:{pow:0,mult:0,spin:1,reach:0,arrows:0,hits:0,spd:0,crit:0,critOver:2},count:{},over:{spd:0,spin:0},src:null,cur:null,dmgBy:{},trig:{},hitStat:{},dynStat:{},hookHits:0,hitKey:null,hitOwner:null,miniBounce:0,miniTouch:0,miniHunt:0,miniHuntShare:0,ice:[],pockets:null,bossNote:'',hotWalls:null,off:null};
  const T=run.tier,enc=run.enc;
  {const wk=has(run,'weak')?1-TROPHY.weak.v.percent/100:1,E=endlessScale(T),L=lateScale(T);S.hs=Math.pow(HS,T-1)*wk*E.hp*L.hp;S.bhs=Math.pow(BHS,T-1)*wk*E.hp*L.hp*(T===1?(RULES.scaling.firstBossHpPercent||100)/100:1);S.ds=Math.pow(DS,T-1)*E.dmg*L.dmg}
- S.refHp=IMP?(IMP.minReferenceHp||0)*S.hs:0;S.hold=false;
+ S.refHp=IMP?(IMP.minReferenceHp||0)*S.hs:0;S.hold=false;S.endlessFight=T>RULES.run.tiersToWin;
  if(!S.preview&&!o.keepItems){run.active=(run.bag||[]).filter(x=>x.use&&ITEM[x.id]&&x.id!=='crystal').map(x=>x.id);run.bag=(run.bag||[]).filter(x=>!x.use||x.id==='crystal')}   // items switched on are used up now
  S.lock=!S.preview&&(run.active||[]).includes('padlock');
  S.off=new Set();{const bc=enc.boss&&BOSS[enc.boss]&&BOSS[enc.boss].code;if(bc&&bc.offAtStart&&!S.preview&&!S.lock)for(const a of bc.offAtStart(run,BOSS[enc.boss].v))if(a)S.off.add(a)}S.disabled=[...S.off][0]||null;   // The Null and The Reflection switch sockets off
@@ -821,7 +900,7 @@ function enemyHit(S,att,t,pow){
  if(att&&att.shock>0)pow*=1-Math.min(ST.shockMax,att.shock)*ST.shockPercent/100;   // Shock
  const raw=pow*S.overtime,capd=raw*(1-capOf(S.run,'armor')/100),d=Math.max(1,capd,raw-t.armor);
  const atCap=raw>0&&raw-t.armor<=capd;if(t.player&&raw>0){count(S,'hitsTaken');if(atCap)count(S,'hitsCapped')}   // how often your Armor reaches its cap (tests, breakdown)
- if(t.player||t.twin)fire(S,'onHurt',{att,raw,d,capped:atCap});
+ if(t.player||t.twin)fire(S,'onHurt',{att,raw,d,capped:atCap});if(t.player)count(S,'taken:'+(att?(att.ram?'ram':att.kind):'other'),d);   // damage taken by source (tests)
  count(S,'hurt');if(att&&att.vamp&&att.alive)heal(S,att,d*att.vamp,true);   // Vampiric elite
  t.hp-=d;t.flash=.12;text(S,t.x,t.y-t.r,d,'hurt');snd(S,'hurt');
  if(S.P.hurtInv>0&&(t.player||t.mini||t.twin))t.inv=Math.max(t.inv,S.P.hurtInv);   // Second Skin: a moment of immunity after a hit
@@ -896,8 +975,15 @@ function step(S,dt){
   for(const e of S.balls)if(e.alive&&e.team===1&&!e.boss){const ec=ENEMY_CODE[e.kind];if(ec&&ec.tick)ec.tick(S,e,dt,e.def.v)}   // enemy behaviours
   if(S.ice.length){const pl_=S.player;for(let i=S.ice.length-1;i>=0;i--){const z=S.ice[i];z.t-=dt;if(z.t<=0){S.ice.splice(i,1);continue}
    if(pl_.alive&&!(pl_.frozen>0)&&S.t>=(pl_.iceT||0)&&Math.hypot(pl_.x-z.x,pl_.y-z.y)<z.r+pl_.r*.5){pl_.frozen=z.freeze;pl_.iceT=S.t+z.cd;fx(S,{k:'ring',x:pl_.x,y:pl_.y,r:pl_.r+12,col:DATA.theme.effects.freeze||'#d9f4ff'})}}}   // The Glacier's ice patches
-  if(S.pockets){for(const e of S.balls){if(!e.alive||e.team!==1||e.boss||e.knockT==null||S.t-e.knockT>S.pockets.window)continue;
-   const cx=e.x<AW/2?0:AW,cy=e.y<AH/2?0:AH;if(Math.hypot(e.x-cx,e.y-cy)<S.pockets.r){fx(S,{k:'burst',x:cx?cx-8:8,y:cy?cy-8:8,col:e.col,n:18});snd(S,'pop');S.hitKey='src:pocket';damage(S,e,e.hp+e.armor+1,'aoe');S.hitKey=null;count(S,'pocketed')}}}   // The Eight Ball's pockets
+  if(S.pockets){const PK=S.pockets;let others=0;for(const e of S.balls)if(e.alive&&e.team===1&&!e.boss)others++;   // The Eight Ball's pockets
+   for(const e of S.balls){if(!e.alive||e.knockT==null||S.t-e.knockT>PK.window||S.t<(e.pocketT||0))continue;
+    const cx=e.x<AW/2?0:AW,cy=e.y<AH/2?0:AH;if(Math.hypot(e.x-cx,e.y-cy)>=Math.max(PK.r,e.r*Math.SQRT2+6))continue;   // a big ball pressed into the corner counts too
+    const bx=cx?cx-8:8,by=cy?cy-8:8;
+    if(e.team===1&&!e.boss){fx(S,{k:'burst',x:bx,y:by,col:e.col,n:18});snd(S,'pop');S.hitKey='src:pocket';damage(S,e,e.hp+e.armor+1,'aoe');S.hitKey=null;count(S,'pocketed')}
+    else if(e.team===1){if(others)continue;e.pocketT=S.t+PK.bossCooldown;e.knockT=null;   // the Eight Ball: only when it is the last ball; hurts, never kills
+     const amt=Math.min(e.maxhp*PK.bossPercent/100,e.hp-1);if(amt>0){const ar=e.armor;e.armor=0;S.hitKey='src:pocket';damage(S,e,amt,'aoe');S.hitKey=null;e.armor=ar}
+     const dx=AW/2-e.x,dy=AH/2-e.y,dd=Math.hypot(dx,dy)||1;e.vx=dx/dd*e.spd*2;e.vy=dy/dd*e.spd*2;fx(S,{k:'burst',x:bx,y:by,col:DATA.theme.page.chalk,n:24});fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+20,col:DATA.theme.page.gold});snd(S,'impact');count(S,'bossPocketed')}
+    else if(e.player||e.twin){e.knockT=null;e.pocketT=S.t+PK.stall+PK.climb;e.stall=S.t;fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+14,col:DATA.theme.page.mult});snd(S,'hurt');count(S,'stalled')}}}   // your ball: stops dead, then speeds back up
   if(P.regen>0){heal(S,pl,P.regen*dt,true);for(const b of S.balls)if(b.twin&&b.alive)heal(S,b,P.regen*dt,true);if(P.miniRegen>0)for(const b of S.balls)if(b.mini&&b.alive)heal(S,b,P.regen*P.miniRegen*dt,true)}   // Lifeline: Minis share your Regen
   S.statusAcc+=dt;
   if(S.statusAcc>=.5){S.statusAcc-=.5;
@@ -915,23 +1001,23 @@ function step(S,dt){
   if(S.done)return;
  }
  const capS=capOf(S.run,'spd'),capR=capOf(S.run,'spin');
- pl.spd=Math.min(capS,P.spd*(1+S.ramp.spd)*S.chill);
+ pl.spd=Math.min(capS,P.spd*(1+S.ramp.spd)*S.chill)*stallF(S,pl);
  S.over.spd=Math.max(0,P.raw.spd*(1+S.ramp.spd)*S.chill-capS);S.over.spin=Math.max(0,P.raw.spin*S.ramp.spin*S.chill-capR);
  for(const w of pl.ws){w.spin=Math.min(capR,P.spin*S.ramp.spin*S.chill);w.len=P.reach+S.ramp.reach}
- for(const b of S.balls)if(b.twin&&b.alive){const R=b.ramp;b.spd=Math.min(capS,P.spd*(1+R.spd)*S.chill);for(const w of b.ws){w.spin=Math.min(capR,P.spin*R.spin*S.chill);w.len=P.reach+R.reach}}   // Mitosis twin: your stats with its own ramp
+ for(const b of S.balls)if(b.twin&&b.alive){const R=b.ramp;b.spd=Math.min(capS,P.spd*(1+R.spd)*S.chill)*stallF(S,b);for(const w of b.ws){w.spin=Math.min(capR,P.spin*R.spin*S.chill);w.len=P.reach+R.reach}}   // Mitosis twin: your stats with its own ramp
  // move
  for(const b of S.balls){
   if(!b.alive)continue;
   if(b.inv>0)b.inv-=dt;if(b.bcd>0)b.bcd-=dt;if(b.flash>0)b.flash-=dt;
   if(b.life!=null&&(b.life-=dt)<=0){b.alive=false;fx(S,{k:'burst',x:b.x,y:b.y,col:b.col,n:5});continue}   // Afterimage clones fade
   if(b.fixed){b.vx=b.vy=0;continue}   // Mini Hut: never moves
-  let sm=1;if(b.stun>0){b.stun-=dt;sm=.15}if(b.pause>0){b.pause-=dt;sm=0}if(b.dashT>0)b.dashT-=dt;if(b.tele>0)b.tele-=dt;   // pause: winding up; dashT: lunging or charging
+  let sm=1;if(b.stun>0){b.stun-=dt;sm=.15}if(b.pause>0){b.pause-=dt;sm=0}if(b.stall!=null)sm*=stallF(S,b);if(b.dashT>0)b.dashT-=dt;if(b.tele>0)b.tele-=dt;   // pause: winding up; dashT: lunging or charging
   if(b.frozen>0){b.frozen-=dt;sm=0}else if(b.chill>0)sm*=Math.max(0,1-b.chill*ST.chillSlowPercent/100);   // Freeze stops the ball, Chill slows it
   b.x+=b.vx*dt*sm;b.y+=b.vy*dt*sm;
   let hit=false;
   if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx);hit=true}else if(b.x>AW-b.r){b.x=AW-b.r;b.vx=-Math.abs(b.vx);hit=true}
   if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy);hit=true}else if(b.y>AH-b.r){b.y=AH-b.r;b.vy=-Math.abs(b.vy);hit=true}
-  if(hit){const j=(rnd(S.rsrc)-.5)*CB.wallBounceJitter,c=Math.cos(j),s=Math.sin(j),vx=b.vx*c-b.vy*s,vy=b.vx*s+b.vy*c;
+  if(hit){const j=b.ram?0:(rnd(S.rsrc)-.5)*CB.wallBounceJitter,c=Math.cos(j),s=Math.sin(j),vx=b.vx*c-b.vy*s,vy=b.vx*s+b.vy*c;
    // keep heading into the arena after the nudge
    b.vx=(b.x<=b.r)?Math.abs(vx):(b.x>=AW-b.r)?-Math.abs(vx):vx;b.vy=(b.y<=b.r)?Math.abs(vy):(b.y>=AH-b.r)?-Math.abs(vy):vy;
    if(b.player){snd(S,'wall');if(live){count(S,'wallHits');bounceEvent(S,b)}if(S.done)return}
@@ -939,7 +1025,7 @@ function step(S,dt){
    else if(live&&b.mini&&S.t<S.miniBounce){asHalf(S,halfOf(b),()=>bounceEvent(S,b));if(S.done)return}   // Pack Bounce: Minis' bounces count as yours
    else if(live&&b.team===1){count(S,'enemyWallHits');if(b.boss&&S.bossDef&&S.bossDef.code.onWall)S.bossDef.code.onWall(S,b,S.bossDef.v);else if(ENEMY_CODE[b.kind]&&ENEMY_CODE[b.kind].onWall)ENEMY_CODE[b.kind].onWall(S,b,b.def.v);fire(S,'onEnemyWall',{ball:b,speed:Math.hypot(b.vx,b.vy)});if(S.done)return}}
   const sp=Math.hypot(b.vx,b.vy);
-  if(sp<5){if(!(b.frozen>0)&&!(b.pause>0))launch(S,b)}else{const tgt=b.spd*(b.dashT>0?(b.dashX||1):1),ns=sp+(tgt-sp)*Math.min(1,(b.dashT>0?12:4)*dt);b.vx*=ns/sp;b.vy*=ns/sp}
+  if(b.stall!=null){}else if(sp<5){if(!(b.frozen>0)&&!(b.pause>0))launch(S,b)}else{const tgt=b.spd*(b.dashT>0?(b.dashX||1):1),ns=sp+(tgt-sp)*Math.min(1,(b.dashT>0?12:4)*dt);b.vx*=ns/sp;b.vy*=ns/sp}
   if(b.aim&&b.stun<=0&&!(b.frozen>0)&&!(b.dashT>0)&&!b.noAim){const tg=nearestFoe(S,b);if(tg){let d=Math.atan2(tg.y-b.y,tg.x-b.x)-Math.atan2(b.vy,b.vx);d=Math.atan2(Math.sin(d),Math.cos(d));const q=clamp(d,-b.aim*dt,b.aim*dt),c=Math.cos(q),s=Math.sin(q),vx=b.vx*c-b.vy*s;b.vy=b.vx*s+b.vy*c;b.vx=vx}}
   for(const w of b.ws){
    if(w.cd>0)w.cd-=dt;if(w.pcd>0)w.pcd-=dt;
@@ -972,7 +1058,9 @@ function step(S,dt){
     if(p.bcd<=0){p.bcd=CB.bodyHitCooldown;if(p.player||p.twin){S.hitOwner=p.twin?'twin':null;if(P.W.fist&&!P.noWeapon)playerHit(S,e,'body',1,null,true);S.hitOwner=null;fire(S,'onTouch',e)}else if(p.hut){}else{S.hitOwner=p.miniYou?'miniyou':null;const mp=S.t<S.miniHunt?Math.max(RULES.minis.powerPercent/100,S.miniHuntShare):RULES.minis.powerPercent/100;
      playerHit(S,e,'mini',p.miniYou?(P.W.fist?p.share:mp):mp*P.miniDmgX);S.hitOwner=null;
      if(e.alive&&P.miniKb>0)knockBy(S,e,p.x,p.y,pushStat(S)*P.miniKb);if(e.alive&&S.t<S.miniTouch)fire(S,'onTouch',e)}}   // Pack Training knock, Pack Hunt and Pack Contact windows
-    if(e.alive&&p.alive&&e.body>0&&e.bcd<=0&&!(e.frozen>0)){e.bcd=CB.enemyBodyHitCooldown;enemyHit(S,e,p,e.body)}
+    if(e.alive&&p.alive&&e.body>0&&(e.bcd<=0||e.ram)&&!(e.frozen>0)){e.bcd=CB.enemyBodyHitCooldown;const rv=e.ram&&RAMV();enemyHit(S,e,p,e.body*(rv?(e.kind==='grunt'?rv.gruntRamDamageMult:rv.ramDamageMult):1));
+     if(rv&&p.alive){knock(S,p,e.x,e.y,rv.ramKnock);p.knockT=S.t;endRam(e);fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+18,col:e.col});snd(S,'impact')}
+     else if(e.impact>0&&p.alive){knock(S,p,e.x,e.y,e.impact);p.knockT=S.t}}   // pool balls shove your ball on contact (stripes harder)   // a ram hits hard and knocks you flying
     if(S.done){exitHalf(S,tk);return}
    }
    exitHalf(S,tk)}}
@@ -1039,6 +1127,7 @@ function encAt(run,i){return run.plan&&run.planTier===run.tier&&run.plan[i]?run.
 function genEnc(run){
  const T=run.tier,st=run.stage,SC=RULES.scaling;
  if(st===2){let id=run.bosses[T-1];if(!id||!BOSS[id]){id=pick(run,BOSS_POOL.concat(FINAL_BOSS));run.bosses[T-1]=id}
+  if(BOSS[id].v.rack)return{boss:id,list:[]};   // The Eight Ball brings its rack instead
   const list=[];let bud=Math.max(0,(T-SC.bossAddsStartTier)*SC.bossAddsBudgetPerTier);const opts=SC.bossAddTypes.filter(k=>ENEMY[k]&&ENEMY[k].min<=T);let guard=0;
   while(bud>=.5&&list.length<SC.bossAddsMax&&opts.length&&guard++<60){const k=pick(run,opts);if(ENEMY[k].cost>bud){if(bud<1&&ENEMY.swarm){list.push('swarm');bud-=.5}continue}list.push(k);bud-=ENEMY[k].cost}
   return{boss:id,list}}
@@ -1113,5 +1202,5 @@ function pickTrophy(run,id){
  return true;
 }
 
-const CORE={openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
+const CORE={statView,shopState,openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
 if(typeof module!=='undefined')module.exports=CORE;
