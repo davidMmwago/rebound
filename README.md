@@ -1,8 +1,8 @@
 # Rebound
 
-A roguelike about a bouncing ball. Your ball ricochets around the arena on its own, swinging its weapon at everything it hits. You don't steer it. You build it.
+A roguelike about a bouncing ball. Your ball ricochets around the arena on its own, swinging its weapon at everything it hits.
 
-**Play it in your browser:** open `index.html`, or visit the GitHub Pages site for this repository.
+**Play it in your browser:** visit the GitHub Pages site for this repository.
 
 ## How a run works
 
@@ -28,6 +28,5 @@ A roguelike about a bouncing ball. Your ball ricochets around the arena on its o
 Hover over any coloured word on a card to see what it means.
 
 ## Credits
-
 - Fonts: *Pixel Game* (free for personal use) and *Alpha Beta* by Brian Kent (freeware). Their licence files are in `assets/fonts/`.
 - Inspired by Earclacks' ball battle videos and Balatro.
