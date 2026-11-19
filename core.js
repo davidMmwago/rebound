@@ -59,7 +59,7 @@ const ST=Object.assign({chillSlowPercent:5,chillMax:10,chillFadePerSecond:1,free
    within range for percent% more damage than the last link, up to max links, with "Chain ×n" from showAt and impact frames at heavyAt and massiveAt. */
 const LTN=Object.assign({percent:50,max:8,range:220,showAt:2,heavyAt:4,massiveAt:6},RULES.lightning||{});
 /* Placeholders any text may use, on top of its own values. */
-const GLOBALS={miniPower:RULES.minis.powerPercent,miniMax:RULES.minis.safetyLimit||60,poisonDps:RULES.combat.poisonDamagePerStackPerSecond,burnDps:RULES.combat.burnDamagePerStackPerSecond,critMult:RULES.player.critMult,armorCap:RULES.combat.armorMaxReductionPercent,chillSlow:ST.chillSlowPercent,shockPct:ST.shockPercent,shockMax:ST.shockMax,lightningPct:LTN.percent,chillMax:ST.chillMax,freezeSeconds:ST.freezeSeconds,burnPower:RULES.combat.burnPowerPercentPerStack||0};
+const GLOBALS={miniPower:RULES.minis.powerPercent,miniMax:RULES.minis.safetyLimit||60,poisonDps:RULES.combat.poisonDamagePerStackPerSecond,burnDps:RULES.combat.burnDamagePerStackPerSecond,critMult:RULES.player.critMult,armorCap:RULES.combat.armorMaxReductionPercent,chillSlow:ST.chillSlowPercent,shockPct:ST.shockPercent,shockMax:ST.shockMax,lightningPct:LTN.percent,lightningMax:LTN.max,chillMax:ST.chillMax,freezeSeconds:ST.freezeSeconds,burnPower:RULES.combat.burnPowerPercentPerStack||0};
 function tpl(s,vals){return String(s==null?'':s).replace(/\{(\w+)\}/g,(m,k)=>vals&&k in vals?f1v(vals[k]):k in GLOBALS?f1v(GLOBALS[k]):m)}
 function f1v(v){return typeof v==='number'?f1(v):String(v)}
 
@@ -243,7 +243,9 @@ function spawnEnemy(S,id,x,y,o){
 const enemies=S=>S.balls.filter(b=>b.alive&&b.team===1);
 /* The count of whichever event this fight has had most of: hits, bounces, crits, collisions or kills (Singularity). */
 /* How many different statuses your side has applied this fight (Convergence): Burn, Chill or Freeze, Poison, Shock. */
-const statusesApplied=S=>{const C=S.count||{};return(C.burn>0)+(C.chill>0||C.freezes>0)+(C.poison>0)+(C.shock>0)};
+const statusesApplied=S=>{const C=S.count||{};return(C.burn>0)+(C.chill>0||C.freezes>0)+(C.poison>0)+(C.shock>0)+(C.siphon>0)};
+/* How many kinds of damage over time an enemy has on it right now (Catalyst): Poison, Burn, and Siphon if it was siphoned in the last second. */
+const dotKinds=(S,e)=>(e.poison>0)+(e.burn>0)+(S.t-(e.siphT==null?-9:e.siphT)<1);
 const topEvent=S=>{const C=S.count||{};return Math.max(C.hits||0,C.bounces||0,C.crits||0,(C.collisions||0)+(C.enemyCollisions||0),C.kills||0)};
 /* How many Minis you have, for effects that count them (Hive Mind, Underdog). With Mitosis, each of your other halves counts as miniCount. */
 const minis=S=>{let n=0;for(const b of S.balls)if(b.alive){if(b.mini)n++;else if(b.miniCount&&b!==S.player)n+=b.miniCount}return n};
@@ -348,10 +350,12 @@ const AUG_CODE={
  under:{onHit(a,S,c,v){if(enemies(S).length>1+minis(S)){c.mult*=v.mult;return true}}},
  // swarm
  /* Mini augments, round 2. Windows (Pack Bounce, Pack Contact, Pack Hunt) open at fight start and then every interval seconds. */
- packquest:{stats(a,S,P,v){if((a.n||0)>=v.need){P.miniSpd=1;P.miniKb=Math.max(P.miniKb,v.knockPercent/100)}},
+ /* Quests: once done, the reward is kept for the run even if the card is sold (run.questsDone; the 'quest' source kind applies reward()). */
+ packquest:{reward(t,S,P,v){P.miniSpd=1;P.miniKb=Math.max(P.miniKb,v.knockPercent/100)},
+  stats(a,S,P,v){if((a.n||0)>=v.need)AUG.packquest.reward(a,S,P,v)},
   onTick(a,S,dt,v){if(a.f.done||(a.n||0)>=v.need||(a.n||0)+(S.count.minis||0)<v.need)return;a.f.done=1;S.P.miniSpd=1;S.P.miniKb=Math.max(S.P.miniKb,v.knockPercent/100);
    for(const b of S.balls)if(b.alive&&b.mini&&!b.miniYou)b.spd=Math.max(b.spd,S.P.spd);fx(S,{k:'ring',x:S.player.x,y:S.player.y,r:80,col:DATA.theme.page.gold});return true},
-  onWin(a,S,lines,v){if((a.n||0)<v.need)a.n=Math.min(v.need,(a.n||0)+(S.count.minis||0))},
+  onWin(a,S,lines,v){if((a.n||0)<v.need)a.n=Math.min(v.need,(a.n||0)+(S.count.minis||0));if(a.n>=v.need)(S.run.questsDone||(S.run.questsDone={})).packquest=1},
   info:(a,v)=>(a.n||0)>=v.need?DATA.text.questDone||'Quest complete':tpl(DATA.text.questProgress||'Quest: {n}/{need}',{n:a.n||0,need:v.need}),
   live:(a,S,v)=>{const n=Math.min(v.need,(a.n||0)+(S.count.minis||0));return n>=v.need?'':n+'/'+v.need}},
  afterimage:{onTick(a,S,dt,v){a.f.t=(a.f.t||0)+dt;if(a.f.t<v.interval)return;a.f.t=0;let made=0,live=0;for(const b of S.balls)if(b.alive&&b.clone)live++;
@@ -376,8 +380,10 @@ const AUG_CODE={
  /* Mini Hut: at fight start a Hut stands near you (a fixed ball on your side that enemies can attack). It makes a Mini every few seconds until it is
     destroyed. Minis alive at the end of a won fight are kept (a.n, up to keep) and come back at the start of the next fight. */
  hut:{onStart(a,S,x,v){const p=S.player,h=mkBall({team:0,hut:true,fixed:true,kind:'hut',x:clamp(p.x-p.r-v.radius-12,v.radius+2,AW-v.radius-2),y:clamp(p.y-70,v.radius+2,AH-v.radius-2),r:v.radius,hp:S.P.hp*v.hpPercent/100,spd:0,col:DATA.theme.balls.hut||'#c08552'});
-   h.m=1e6;h.vx=h.vy=0;h.owner=S.player;S.balls.push(h);a.f.hut=h;for(let i=0;i<(a.n||0);i++)spawnMini(S);return true},
-  onTick(a,S,dt,v){const h=a.f.hut;if(!h||!h.alive)return;a.f.t=(a.f.t||0)+dt;if(a.f.t<v.every)return;a.f.t=0;spawnMini(S,h.x,h.y+h.r);return true},
+   h.m=1e6;h.vx=h.vy=0;h.owner=S.player;S.balls.push(h);a.f.hut=h;for(let i=0;i<Math.min(a.n||0,v.max||99);i++){const m=spawnMini(S);if(m)m.hutOf=h}return true},
+  onTick(a,S,dt,v){const h=a.f.hut;if(!h||!h.alive)return;a.f.t=Math.min(v.every,(a.f.t||0)+dt);if(a.f.t<v.every)return;
+   let n=0;for(const b of S.balls)if(b.alive&&b.hutOf===h)n++;if(n>=(v.max||99))return;   // full: waits, and makes the next one as soon as one of its Minis falls
+   a.f.t=0;const m=spawnMini(S,h.x,h.y+h.r);if(m)m.hutOf=h;return true},
   onWin(a,S,lines,v){let k=0;for(const b of S.balls)if(b.alive&&b.mini&&!b.clone&&!b.miniYou)k++;a.n=Math.min(v.keep,k)},
   info:a=>tpl(DATA.text.currently,{value:'+'+(a.n||0)+' '+(DATA.text.miniWord||'Minis')}),
   live:(a,S,v)=>{const h=a.f.hut;return h&&h.alive?f1(Math.ceil((v.every-(a.f.t||0))*10)/10)+'s':''}},
@@ -505,6 +511,19 @@ const AUG_CODE={
  catalyst:{stats(a,S,P,v){P.cat={mult:v.mult,both:v.bothMult}}},
  /* Seeping Wounds: Poison and Burn ticks are multiplied by your current Mult on that enemy (dotMult(), the same Mult a hit on it would get, crits
     aside); percent scales how much of the Mult above ×1 counts. */
+ /* Siphon (19 Nov 2026): turns Regen into damage over time on the nearest enemy; the damage itself is in step() (search "Siphon"). */
+ siphon:{stats(a,S,P){P.siphon=(P.siphon||0)+1}},
+ /* Cushion (19 Nov 2026): holds back percent% of each hit you take and deals it to you over seconds instead (a.f.pool, drained at a.f.rate per second).
+    The drain pauses while you are immune. Regen heals against it. Resonator or Mirror Ball on it hold back percent% of what is left as well. */
+ cushion:{onHurt(a,S,x,v){const left=x.d-(x.held||0);if(!(left>0))return;const h=left*v.percent/100;x.held=(x.held||0)+h;a.f.pool=(a.f.pool||0)+h;a.f.rate=(a.f.rate||0)+h/v.seconds;return true},
+  onTick(a,S,dt,v){const p=S.player;if(!(a.f.pool>0)||!p.alive||p.inv>0)return;const amt=Math.min(a.f.pool,a.f.rate*dt);a.f.pool-=amt;if(a.f.pool<=1e-6){a.f.pool=0;a.f.rate=0}
+   p.hp-=amt;a.f.sh=(a.f.sh||0)+amt;if(a.f.sh>=1&&S.t-(a.f.st||0)>=.5){text(S,p.x,p.y-p.r,a.f.sh,'hurt');a.f.sh=0;a.f.st=S.t}
+   if(p.hp<=0){if(p.twin){p.alive=false;fx(S,{k:'burst',x:p.x,y:p.y,col:p.col,n:8});dropHalf(S,p)}else playerDown(S)}},
+  live:a=>a.f.pool>=1?tpl(DATA.text.held||'{n} held',{n:short(a.f.pool)}):''},
+ /* Pedigree (19 Nov 2026): +Power for each Rare, Epic and Legendary augment in your sockets (switched-off ones don't count; Void augments have no socket).
+    values are keyed by rarity name in lower case. a.n keeps the last total for the card. */
+ pedigree:{stats(a,S,P,v){let n=0;for(const x of S.run.augs){if(isOff(S,x))continue;const d=AUG[x.id];if(d)n+=v[RAR[d.rar].toLowerCase()]||0}a.n=n;P.pow+=n},
+  info:a=>tpl(DATA.text.currently,{value:'+'+f1(a.n||0)+' '+DATA.text.statNames.power})},
  seep:{stats(a,S,P,v){P.dotMult=Math.max(P.dotMult||0,v.percent/100)}},
  mass:{preHit(a,S,c,v){S.ramp.crit+=v.percent/100;S.ramp.critOver=v.critMultPerOverflow}},
 };
@@ -599,7 +618,7 @@ const TROPHY_CODE={
  hide:{stats(t,S,P,v){P.hp+=v.hp;P.armor+=v.armor}},
  edge:{stats(t,S,P,v){P.mult+=v.mult}},
  tonic:{stats(t,S,P,v){P.crit+=v.critPercent/100;P.regen+=v.regen}},
- pack:{stats(t,S,P,v){P.miniDmgX*=1+v.percent/100},onStart(t,S,x,v){for(let i=0;i<v.count;i++)spawnMini(S);return true}},
+ pack:{onStart(t,S,x,v){for(let i=0;i<v.count;i++)spawnMini(S);return true}},
 };
 const TROPHY={};
 for(const id of dkeys(DATA.trophies)){const d=DATA.trophies[id];
@@ -655,6 +674,8 @@ function voidPool(run){return Object.keys(AUG).filter(k=>isVoid(k)&&!(run.void||
 function openMarket(run,i){const b=run.bag&&run.bag[i];if(!b||b.id!=='crystal'||run.market)return false;const pool=voidPool(run);if(!pool.length)return false;
  run.bag.splice(i,1);const n=Math.min(pool.length,(ITEM.crystal&&ITEM.crystal.v.offers)||4),m=[];while(m.length<n){const k=pick(run,pool.filter(x=>!m.includes(x)));m.push(k)}run.market=m;return true}
 function pickVoid(run,id){if(!run.market||!run.market.includes(id))return false;(run.void||(run.void=[])).push(id);run.market=null;return true}
+/* Finished quests whose card you no longer own still give their reward (an owned card gives it itself). */
+addSourceKind({kind:'quest',stage:'early',list:run=>Object.keys(run.questsDone||{}).filter(id=>AUG[id]&&AUG[id].reward&&!run.augs.some(a=>a.id===id)).map(id=>({def:{id,name:AUG[id].name,tags:[],stats:AUG[id].reward},st:srcState(run,'quest:'+id),v:AUG[id].v}))});
 addSourceKind({kind:'trophy',stage:'early',list:run=>run.trophies.filter(id=>TROPHY[id]).map(id=>({def:TROPHY[id],st:srcState(run,'trophy:'+id),v:TROPHY[id].v}))});
 /* The non-augment entries of a run, split by stage. Built once per fight and cached on S (trophies and the like do not change mid-fight). */
 function sourceLists(run){const L={early:[],late:[]};for(const k of SOURCE_KINDS)for(const e of k.list(run))L[k.stage==='late'?'late':'early'].push(e);return L}
@@ -753,7 +774,8 @@ function calcPlayer(run,S){
  P.raw={spd:P.spd,spin:P.spin,blades:P.blades};   // before the caps, for overflow
  const cS=capOf(run,'spd'),cR=capOf(run,'spin'),cB=capOf(run,'blades');   // one Speed cap now (was 560 here and 760 in the fight)
  P.over={spd:Math.max(0,P.spd-cS),spin:Math.max(0,P.spin-cR),blades:Math.max(0,P.blades-cB)};
- P.hp=Math.max(1,Math.round(P.hp));P.spin=Math.min(P.spin,cR);P.spd=Math.min(P.spd,cS);P.blades=Math.min(P.blades,cB);if(P.bladesPastCap)P.blades=Math.min((RULES.uncapped||{}).blades||16,Math.round(P.blades*P.bladesPastCap));   // Twin Kit: past the capP.bounceX=Math.max(1,Math.round(P.bounceX));
+ P.hp=Math.max(1,Math.round(P.hp));P.spin=Math.min(P.spin,cR);P.spd=Math.min(P.spd,cS);P.blades=Math.min(P.blades,cB);if(P.bladesPastCap)P.blades=Math.min((RULES.uncapped||{}).blades||16,Math.round(P.blades*P.bladesPastCap));   // Twin Kit: past the cap
+ P.bounceX=Math.max(1,Math.round(P.bounceX));
  return P;
 }
 
@@ -800,7 +822,7 @@ function spawnMiniYou(S,v,x,y){
 function spawnMini(S,x,y){
  const M=RULES.minis;let alive=0;for(const o of S.balls)if(o.alive&&o.mini)alive++;if(alive>=(M.safetyLimit||60)){count(S,'overflowMinis');return}const p=S.player;count(S,'minis');   // no game cap on Minis; safetyLimit only keeps the frame rate up
  const b=mkBall({team:0,mini:true,kind:'mini',x:x==null?p.x+(rnd(S.rsrc)-.5)*50:x,y:y==null?p.y+(rnd(S.rsrc)-.5)*50:y,r:M.radius,hp:S.P.hp*M.hpPercent/100*S.P.miniHpX,spd:S.P.miniSpd?Math.max(M.speed,S.P.spd):M.speed,armor:S.P.armor*Math.max(M.armorPercent/100,S.P.miniArmor),col:DATA.theme.balls.mini});
- b.owner=S.player;b.born=S.t;b.x=clamp(b.x,12,AW-12);b.y=clamp(b.y,12,AH-12);launch(S,b);S.balls.push(b);
+ b.owner=S.player;b.born=S.t;b.x=clamp(b.x,12,AW-12);b.y=clamp(b.y,12,AH-12);launch(S,b);S.balls.push(b);return b;
 }
 function shoot(S,from,ang,f,main,vol,o){   // o (Bow arrows): {spdX: speed multiplier from Reach, kb: Knockback each arrow pushes with}
  o=o||{};
@@ -855,13 +877,13 @@ function knockResist(S,t){const enemy=t.team===1,hp=enemy?t.maxhp/((t.boss?BH0*S
 function knock(S,t,fx_,fy_,kb){if(!(kb>0))return;const dx=t.x-fx_,dy=t.y-fy_,d=Math.hypot(dx,dy)||1,k=kb/Math.max(.6,t.m)*knockResist(S,t);t.vx+=dx/d*k;t.vy+=dy/d*k}
 
 /* The kind of damage for boss rules: 'poison', 'burn', 'hit' (your weapon, body, projectiles, Minis) or 'effect' (augment effects, shocks). */
-function dmgType(S,kind){if(kind==='poison'||kind==='burn')return kind;const k=S.hitKey||'';return/^src:(weapon|body|proj|mini|miniyou|twin)$/.test(k)?'hit':'effect'}
+function dmgType(S,kind){if(kind==='poison'||kind==='burn'||kind==='siphon')return kind;const k=S.hitKey||'';return/^src:(weapon|body|proj|mini|miniyou|twin)$/.test(k)?'hit':'effect'}
 /* Deals damage to an enemy. kind decides the colour of the number; poison and burn ignore armor. */
 function damage(S,t,amt,kind){
  if(!t.alive||t.inv>0||S.done)return 0;
  if(amt!==amt)return 0;   // never let a broken number (NaN) into HP; Infinity is fine and simply kills
  if(t.frozen>0&&S.P&&S.P.frozenX!==1)amt*=S.P.frozenX;   // Glacial Core
- const status=kind==='poison'||kind==='burn';
+ const status=kind==='poison'||kind==='burn'||kind==='siphon';
  if(t.boss&&S.bossDef&&S.bossDef.code.taken){amt=S.bossDef.code.taken(S,t,amt,kind,dmgType(S,kind),S.bossDef.v);if(!(amt>0))return 0}   // boss rules: immunities, weaknesses, adapting
  if(!S.hitKey&&t.team===1&&splitOn(S))amt*=S.splitCut;   // Mitosis cut on damage dealt outside a hit (Poison, Burn, shocks, blasts)
  if(!status)amt=Math.max(1,amt-t.armor);
@@ -900,9 +922,9 @@ function enemyHit(S,att,t,pow){
  if(att&&att.shock>0)pow*=1-Math.min(ST.shockMax,att.shock)*ST.shockPercent/100;   // Shock
  const raw=pow*S.overtime,capd=raw*(1-capOf(S.run,'armor')/100),d=Math.max(1,capd,raw-t.armor);
  const atCap=raw>0&&raw-t.armor<=capd;if(t.player&&raw>0){count(S,'hitsTaken');if(atCap)count(S,'hitsCapped')}   // how often your Armor reaches its cap (tests, breakdown)
- if(t.player||t.twin)fire(S,'onHurt',{att,raw,d,capped:atCap});if(t.player)count(S,'taken:'+(att?(att.ram?'ram':att.kind):'other'),d);   // damage taken by source (tests)
+ let held=0;if(t.player||t.twin){const x={att,raw,d,capped:atCap,held:0,t};if(t.twin)asHalf(S,t,()=>fire(S,'onHurt',x));else fire(S,'onHurt',x);held=Math.min(d,x.held||0)}   // x.held: damage an augment takes off now (Cushion deals it later)if(t.player)count(S,'taken:'+(att?(att.ram?'ram':att.kind):'other'),d);   // damage taken by source (tests)
  count(S,'hurt');if(att&&att.vamp&&att.alive)heal(S,att,d*att.vamp,true);   // Vampiric elite
- t.hp-=d;t.flash=.12;text(S,t.x,t.y-t.r,d,'hurt');snd(S,'hurt');
+ t.hp-=d-held;t.flash=.12;text(S,t.x,t.y-t.r,d-held,'hurt');snd(S,'hurt');
  if(S.P.hurtInv>0&&(t.player||t.mini||t.twin))t.inv=Math.max(t.inv,S.P.hurtInv);   // Second Skin: a moment of immunity after a hit
  if(t.hp<=0){if(t.player)playerDown(S);else{t.alive=false;fx(S,{k:'burst',x:t.x,y:t.y,col:t.col,n:8});if(t.twin)dropHalf(S,t)}}
 }
@@ -988,14 +1010,19 @@ function step(S,dt){
   S.statusAcc+=dt;
   if(S.statusAcc>=.5){S.statusAcc-=.5;
    for(const e of S.balls){if(!e.alive||e.team!==1)continue;
-    let cx=P.cat?(e.poison>0&&e.burn>0?P.cat.both:P.cat.mult):1;
+    let cx=P.cat?(dotKinds(S,e)>=2?P.cat.both:P.cat.mult):1;
     const mf=P.dotMult&&(e.poison>0||e.burn>0)?Math.max(0,1+(dotMult(S,e)-1)*P.dotMult):1;cx*=mf;   // Seeping Wounds
     const credit=d=>{if(mf>1&&d>0&&S.dmgBy)S.dmgBy['boost:seep']=(S.dmgBy['boost:seep']||0)+d*(1-1/mf)};
     if(e.poison>0)credit(damage(S,e,e.poison*.5*CB.poisonDamagePerStackPerSecond*P.poisonX*cx*S.overtime,'poison'));
     if(e.alive&&e.burn>0){credit(damage(S,e,e.burn*.5*(CB.burnDamagePerStackPerSecond+(P.pow+S.ramp.pow)*(CB.burnPowerPercentPerStack||0)/100)*P.burnX*cx*S.overtime,'burn'));   // Burn: a flat part plus a share of Power
      e.burn=Math.max(0,e.burn-.5*CB.burnStacksLostPerSecond*P.burnDecay);if(P.burnGrow&&e.burn>0)e.burn*=Math.sqrt(1+P.burnGrow)}   // Inferno: Burn grows each second
     if(e.alive&&e.chill>0)e.chill=Math.max(0,e.chill-.5*ST.chillFadePerSecond);
-    if(e.alive&&e.shock>0)e.shock=Math.max(0,e.shock-.5*ST.shockFadePerSecond)}}
+    if(e.alive&&e.shock>0)e.shock=Math.max(0,e.shock-.5*ST.shockFadePerSecond)}
+   /* Siphon (augment siphon, P.siphon): each regen tick, every ball of yours that regenerates (your ball, Mitosis twins, and Minis while they share
+      your Regen) deals that tick's Regen to the enemy nearest it, as Siphon damage over time: ignores Armor, counts as a Status, boosted by Catalyst. */
+   if(P.siphon&&P.regen>0){const tick=b=>{const sh=b.mini?P.miniRegen:1;if(!(sh>0))return;const e=nearestFoe(S,b);if(!e||e.team!==1||!e.alive||e.ward>S.t)return;
+     e.siphT=S.t;const cx=P.cat?(dotKinds(S,e)>=2?P.cat.both:P.cat.mult):1;count(S,'siphon');damage(S,e,P.regen*sh*.5*P.siphon*cx*S.overtime,'siphon')};
+    if(pl.alive)tick(pl);for(const b of S.balls.slice()){if(S.done)break;if(b.alive&&(b.twin||(b.mini&&P.miniRegen>0)))tick(b)}}}
   for(let i=S.marks.length-1;i>=0;i--){const m=S.marks[i];m.t-=dt;if(m.t<=0){S.marks.splice(i,1);fx(S,{k:'zap',x1:m.x,y1:0,x2:m.x,y2:m.y});fx(S,{k:'ring',x:m.x,y:m.y,r:m.r,col:m.src.col});snd(S,'zap');
    for(const b of S.balls)if(b.alive&&b.team===0&&Math.hypot(b.x-m.x,b.y-m.y)<m.r+b.r){if(m.pow>0)enemyHit(S,m.src,b,m.pow);if(m.knock){knock(S,b,m.x,m.y,m.knock);b.knockT=S.t}}}}
   if(S.done)return;
@@ -1150,7 +1177,7 @@ function tuneCost(run,k){return(TUNE[k].cost!=null?TUNE[k].cost:RULES.economy.tu
 /* needs "blade" (augments and tune-ups in the data): only offered to weapons with a blade or bow, not Bare Fists, where Spin, Reach and Knockback do nothing. */
 const fits=(run,d)=>!(d&&((d.needs==='blade'&&WEAPONS[run.weapon].fist)||(d.needs==='ranged'&&!(WEAPONS[run.weapon].type==='bow'||run.augs.some(x=>x.id==='sidearm'||x.id==='multi')))));   // ranged: Bow, or Sidearm or Multishot owned
 function rollShop(run,keepReroll){
- const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id)),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!isVoid(k));
+ const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id)),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!isVoid(k)&&!(run.questsDone&&run.questsDone[k]));   // a finished quest is not offered again
  const w=DATA.rarities.map(r=>r.shopWeight+r.shopWeightPerTier*run.tier);if(has(run,'taste'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.taste.v.mult;   // Rare Taste: the third rarity (Rare) and every rarity above it
  let tot=0;for(const x of w)tot+=x;
  const first=run.tier===1&&run.stage===0&&!run.endless,afford=c=>!first||c<=run.gold;   // the first shop only offers what you can afford
@@ -1162,10 +1189,14 @@ function rollShop(run,keepReroll){
   if(c.length)offers.push({id:pick(run,c),sold:false})}
  const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])&&!(TUNE[k].cap&&uncapped(run,TUNE[k].cap))&&!(TUNE[k].cap==='armor'&&capRaise(run,'armor')>=95-baseCap('armor'))&&afford(tuneCost(run,k))),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
  while(tunes.length<nt){const left=tk.filter(k=>!tunes.some(t=>t.k===k));let tw=0;for(const k of left)tw+=TUNE[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=TUNE[q].weight;if(x<0){k=q;break}}tunes.push({k,sold:false})}   // weighted: Hatchling is rarer
- const base=has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost;
+ const base=rerollBase(run);
  const ik=Object.keys(ITEM).filter(k=>fits(run,DATA.consumables[k])&&afford(ITEM[k].cost)),items=[];for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k)&&!(k==='crystal'&&!voidPool(run).length));if(!left.length)break;let tw=0;for(const k of left)tw+=ITEM[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=ITEM[q].weight;if(x<0){k=q;break}}items.push({id:k,sold:false})}   // weighted (items' "weight", default 1)
  run.shop={offers,tunes,items,reroll:keepReroll?run.shop.reroll+RULES.economy.rerollCostStep:base};
 }
+/* Shop lock: a locked shop comes back after the next fight instead of a new one (sold slots stay sold). A shop that came back (kept) can't be
+   locked again; the next new shop can. Rerolling makes a new shop, so it drops the lock. */
+function rerollBase(run){return has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost}
+function toggleLock(run){const sh=run.shop;if(!sh||sh.kept)return false;sh.locked=!sh.locked;return true}
 function buyOffer(run,i){const o=run.shop.offers[i];if(!o||o.sold||run.augs.length>=run.slots)return false;const c=augCost(run,o.id);if(run.gold<c)return false;run.gold-=c;o.sold=true;   // cap Legendaries: the cap is gone for the rest of the run
  run.augs.push({id:o.id,n:0,f:{}});return true}
 function buyTune(run,i){const t=run.shop.tunes[i];if(!t||t.sold)return false;const c=tuneCost(run,t.k);if(run.gold<c)return false;run.gold-=c;t.sold=true;run.tune[t.k]=(run.tune[t.k]||0)+1;return true}
@@ -1196,14 +1227,15 @@ function advance(run){
   run.pending=p.length?p:null;run.tier++;run.stage=0;run.grown=(run.grown||0)+1;if(!run.bosses[run.tier-1])run.bosses[run.tier-1]=pick(run,BOSS_POOL.concat(FINAL_BOSS));
  }else run.stage++;
  if(run.plan&&run.planTier===run.tier)run.enc=run.plan[run.stage];else planTier(run);
- rollShop(run);
+ if(run.shop&&run.shop.locked){run.shop.locked=false;run.shop.kept=true;run.shop.reroll=rerollBase(run)}else rollShop(run);   // a locked shop comes back once
 }
 function pickTrophy(run,id){
  if(!run.pending||!run.pending.includes(id))return false;
  run.trophies.push(id);run.pending=null;
- if(id==='socket')run.slots++;if(id==='shelf'){run.shelf++;const r=run.shop.reroll;rollShop(run);run.shop.reroll=r}if(id==='banker')run.intCap=TROPHY.banker.v.cap;if(id==='coupon')run.shop.reroll=Math.min(run.shop.reroll,TROPHY.coupon.v.rerollBase);
+ if(id==='socket')run.slots++;if(id==='shelf'){run.shelf++;if(run.shop.locked||run.shop.kept){const keep=run.shop;rollShop(run);const extra=run.shop.offers.find(o=>!keep.offers.some(x=>x.id===o.id));run.shop=keep;if(extra)keep.offers.push(extra)}else{const r=run.shop.reroll;rollShop(run);run.shop.reroll=r}}   // a locked or kept shop just gains the extra slot
+ if(id==='banker')run.intCap=TROPHY.banker.v.cap;if(id==='coupon')run.shop.reroll=Math.min(run.shop.reroll,TROPHY.coupon.v.rerollBase);
  return true;
 }
 
-const CORE={statView,shopState,openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
+const CORE={toggleLock,rerollBase,statView,shopState,openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
 if(typeof module!=='undefined')module.exports=CORE;

@@ -11,7 +11,7 @@ function validateGameData(D){
  const keys=o=>Object.keys(o).filter(k=>k[0]!=='_');
  const num=(o,k,path)=>{if(!isNum(o[k]))out.push(path+'.'+k+' must be a number (found '+show(o[k])+')')};
  const str=(o,k,path)=>{if(!isStr(o[k])||!o[k])out.push(path+'.'+k+' must be text in quotes (found '+show(o[k])+')')};
- const GLOBALS=['miniPower','miniMax','poisonDps','burnDps','critMult','armorCap','chillSlow','chillMax','freezeSeconds','burnPower','shockPct','shockMax','lightningPct'];
+ const GLOBALS=['miniPower','miniMax','poisonDps','burnDps','critMult','armorCap','chillSlow','chillMax','freezeSeconds','burnPower','shockPct','shockMax','lightningPct','lightningMax'];
  const holes=(text,vals,path,extra)=>{if(!isStr(text))return;(text.match(/\{(\w+)\}/g)||[]).forEach(m=>{const k=m.slice(1,-1);
   if(!(vals&&k in vals)&&!GLOBALS.includes(k)&&!(extra||[]).includes(k))out.push(path+' uses the placeholder '+m+' but there is no "'+k+'" in its values')})};
 

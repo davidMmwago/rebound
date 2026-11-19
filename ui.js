@@ -263,6 +263,7 @@ document.addEventListener('click',e=>{
   case'void-pick':ok=pickVoid(run,b.dataset.id);if(ok){refreshPreview();play('coin')}break;
   case'item-sell':ok=sellItem(run,i);break;
   case'reroll':ok=reroll(run);break;
+  case'lock':ok=toggleLock(run);break;
   case'sell':{if(performance.now()-G.sellAt<350)return;   // too soon after asking: a long press or a key repeat, not a decision
    const r=b.getBoundingClientRect(),kb=document.activeElement===b;ok=sellAug(run,i);disarmSell();if(ok){sellFx(r.left+r.width/2,r.top+r.height/2);if(kb&&run.augs.length)refocus='#aug'+Math.min(i,run.augs.length-1)}break}
   case'up':ok=moveAug(run,i,-1);if(ok)refocus=i-1>0?'#aug'+(i-1)+' [data-act="up"]':'#aug'+(i-1);break;
@@ -335,7 +336,8 @@ function augList(run,mode){
  const vo=(run.void||[]).filter(id=>AUG[id]);
  if(vo.length)h+=`<h3 class="void-h">${TX.voidTitle||'Void'} <span>${TX.voidHint||''}</span></h3><ol class="augs voids">${vo.map((id,k)=>augCard({id,kind:'owned',i:'v'+k,tag:'li',cls:' void',
   notes:(()=>{const d=AUG[id],st=srcState(run,'void:'+id);return d.info?`<em>${d.info(st,d.v)}</em>`:''})()})).join('')}</ol>`;
- if(tr.length)h+=`<div class="trophies">${tr.map(id=>`<span data-tip="${esc(TROPHY[id].desc)}">${icon('trophies',id)}${TROPHY[id].name}</span>`).join('')}</div>`;
+ const qd=Object.keys(run.questsDone||{}).filter(id=>AUG[id]&&!run.augs.some(x=>x.id===id));   // finished quests you sold: their reward stays
+ if(tr.length||qd.length)h+=`<div class="trophies">${tr.map(id=>`<span data-tip="${esc(TROPHY[id].desc)}">${icon('trophies',id)}${TROPHY[id].name}</span>`).join('')}${qd.map(id=>`<span class="quest-kept" data-tip="${esc(AUG[id].desc)}">${tpl(TX.questKept||'{name}: done',{name:AUG[id].name})}</span>`).join('')}</div>`;
  return h+'</section>';
 }
 /* Power x Mult on one row and Last hit under it, below the ball stats on the left (filled by liveDom during a fight). */
@@ -424,9 +426,11 @@ function nextCard(run,mode){
  if(shop)h+=pk!=null?`<button class="go back" data-act="peek" data-i="${run.stage}" data-primary>${TX.jumpToCurrent||'Jump to current'}</button>`:`<button class="go" data-act="fight" data-primary>${TX.fightButton}</button>`;
  return h+'</section>';
 }
+/* The shop's Lock button: locked shops come back after the next fight; a kept shop can't be locked again. */
+function lockBtn(sh){const k=!!sh.kept,l=!!sh.locked;return `<button class="lock${l?' on':''}" data-act="lock" aria-pressed="${l}" ${k?'disabled':''} data-tip="${esc(k?(TX.lockKeptTip||''):(TX.lockTip||''))}">${k?(TX.lockKept||'Kept'):l?(TX.lockOn||'Locked'):(TX.lockOff||'Lock')}</button>`}
 function shopCard(run){
  const sh=run.shop,full=run.augs.length>=run.slots,E=RULES.economy;
- let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3><button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></div><div class="offers">`;   // reroll in the top right corner
+ let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3><span class="shop-btns">${lockBtn(sh)}<button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></span></div><div class="offers">`;   // reroll in the top right corner
  sh.offers.forEach((o,i)=>{const d=AUG[o.id];if(!d)return;const c=augCost(run,o.id);
   h+=augCard({id:o.id,kind:'offer',i,tag:'div',cls:o.sold?' sold':'',
    foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});
@@ -538,9 +542,11 @@ function breakdown(S,run){
  const order=[...new Set(run.augs.map(a=>a.id).concat(Object.keys(LG),Object.keys(HS),Object.keys(DS)))];
  const statLines=order.map(id=>{const L=LG[id]||{},parts=[];for(const k in L){const v=L[k];if(k.startsWith('inc.')){const s=k.slice(4);parts.push((v>0?'+':'')+Math.round(v*100)+'% '+(statName[s]||s))}else if(k.startsWith('more.')){const s=k.slice(5);parts.push('×'+num(v)+' '+(statName[s]||s))}else parts.push(sv(k,v)+' '+(statName[k]||k))}
   const h=HS[id];if(h&&h.n){const on=tpl(TX.statsOnHits||'on {n}/{all} hits',{n:h.n,all:Math.max(NH,h.n)});
-   if(Math.abs(h.dp)>1e-9)parts.push(tpl(TX.statsPerHit||'{v} {stat} per hit',{v:dv('pow',h.dp/h.n),stat:SN.power})+(h.dpMax>h.dp/h.n*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:dv('pow',h.dpMax)}):'')+' '+on);
-   if(Math.abs(h.dm)>1e-9)parts.push((isX(id)?tpl(TX.statsPerHit||'{v} {stat} per hit',{v:'×'+num(Math.exp(h.lr/h.n)),stat:SN.mult})+(h.rMax>Math.exp(h.lr/h.n)*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:'×'+num(h.rMax)}):'')
-    :tpl(TX.statsPerHit||'{v} {stat} per hit',{v:dv('mult',h.dm/h.n),stat:SN.mult})+(h.dmMax>h.dm/h.n*1.05?' '+tpl(TX.statsMax||'(max {v})',{v:dv('mult',h.dmMax)}):''))+' '+on)}
+   /* One line per stat: "+3 Power per hit" when it was the same on every hit, "×1.7 Mult per hit on average, up to ×2.4" when it varied (statsPerHitRange). */
+   const ph=(v,max,stat)=>max!=null?tpl(TX.statsPerHitRange||'{v} {stat} per hit on average, up to {max}',{v,max,stat}):tpl(TX.statsPerHit||'{v} {stat} per hit',{v,stat});
+   if(Math.abs(h.dp)>1e-9)parts.push(ph(dv('pow',h.dp/h.n),h.dpMax>h.dp/h.n*1.05?dv('pow',h.dpMax):null,SN.power)+' '+on);
+   if(Math.abs(h.dm)>1e-9)parts.push((isX(id)?ph('×'+num(Math.exp(h.lr/h.n)),h.rMax>Math.exp(h.lr/h.n)*1.05?'×'+num(h.rMax):null,SN.mult)
+    :ph(dv('mult',h.dm/h.n),h.dmMax>h.dm/h.n*1.05?dv('mult',h.dmMax):null,SN.mult))+' '+on)}
   const D=DS[id];if(D)for(const k in D){const q=D[k];if(q.peak<1e-6)continue;parts.push(q.tot<q.peak-1e-6?tpl(TX.statsUpTo||'up to {v} {stat}',{v:dv(k,q.peak),stat:dsName[k]||k}):tpl(TX.statsGained||'gained {v} {stat}',{v:dv(k,q.tot),stat:dsName[k]||k}))}
   const d=AUG[id]||TROPHY[id]||ITEM[id];return parts.length?`<li><span>${d?d.name:id}</span><b class="st">${parts.join('<br>')}</b></li>`:''}).join('');   // what each source added to your stats this fight
  const seen=new Set(keys.map(idOf).concat(Object.keys(LG),Object.keys(HS),Object.keys(DS))),rest=[...new Set(run.augs.map(a=>a.id))].filter(id=>AUG[id]&&!seen.has(id)).map(id=>AUG[id].name+(T[id]?' ('+tpl(TX.breakdownTriggered||'{n}×',{n:T[id]})+')':''));
@@ -911,7 +917,7 @@ document.addEventListener('change',e=>{
 
 /* ---------- 6. canvas drawing ---------- */
 /* The canvas is drawn in arena units (0..AW); one transform scales it to the screen. */
-const DT=TH.damageText,TXT={weapon:DT.hit,proj:DT.hit,body:DT.hit,mini:DT.mini,aoe:DT.area,crit:DT.crit,poison:DT.poison,burn:DT.burn,shock:DT.shock,hurt:DT.hurt,heal:DT.heal};
+const DT=TH.damageText,TXT={weapon:DT.hit,proj:DT.hit,body:DT.hit,mini:DT.mini,aoe:DT.area,crit:DT.crit,poison:DT.poison,burn:DT.burn,shock:DT.shock,hurt:DT.hurt,heal:DT.heal,siphon:DT.siphon||DT.heal};
 const INK=TH.arena.outline;
 /* Turns the events the simulation queued this frame into particles, floating numbers and sounds. */
 function drain(S){
@@ -934,7 +940,7 @@ function drain(S){
  for(const f of S.texts){
   if(f.v<.5)continue;
   const big=f.kind==='crit';
-  floats.push({x:f.x+(Math.random()-.5)*14,y:f.y-2,s:(f.kind==='heal'?'+':'')+fmt(f.v)+(big?'!':''),c:TXT[f.kind]||DT.hit,l:.7,m:.7,z:big?15:f.kind==='poison'||f.kind==='burn'?8.5:11});
+  floats.push({x:f.x+(Math.random()-.5)*14,y:f.y-2,s:(f.kind==='heal'?'+':'')+fmt(f.v)+(big?'!':''),c:TXT[f.kind]||DT.hit,l:.7,m:.7,z:big?15:f.kind==='poison'||f.kind==='burn'||f.kind==='siphon'?8.5:11});
   if(f.kind==='hurt'&&!reduce)shake=Math.min(RULES.feel.maxShake,shake+RULES.feel.shakePerHitTaken);
  }
  S.texts.length=0;if(floats.length>70)floats.splice(0,floats.length-70);

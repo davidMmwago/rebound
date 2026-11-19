@@ -396,3 +396,7 @@ html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border
 .stats.livegrid .sd{display:inline-flex;flex-direction:column;align-self:center;line-height:1;gap:1px}
 .stats.livegrid .sd .cb{margin-left:0}
 .adm-row select{font:inherit;font-size:var(--bfs,13.333px);color:var(--chalk);background:var(--ink);border:2px solid var(--drop);border-radius:8px;padding:4px 7px}
+/* shop lock, next to Reroll */
+.shop-btns{display:flex;gap:8px;align-items:center}
+.shop .lock{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);line-height:1;padding:6px 14px;border-radius:12px;white-space:nowrap}
+.shop .lock.on{background:var(--gold);color:var(--ink)}
