@@ -21,8 +21,8 @@ function lateScale(T){const SC=RULES.scaling,k=Math.max(0,T-(SC.lateFromTier||In
    the usual growth, the late push and the spike where they were at the last normal tier, and only the endless multiplier grows on top.
    The spike (spikeFromTier on) multiplies HP by spikeHpPercent and damage by spikeDamagePercent. */
 function tierScale(T){const SC=RULES.scaling,G=RULES.run.tiersToWin,Tb=SC.endlessReplacesGrowth&&T>G?G:T,E=endlessScale(T),L=lateScale(Tb),sp=Tb>=(SC.spikeFromTier||Infinity),
- sh=sp?(SC.spikeHpPercent||100)/100:1,sd=sp?(SC.spikeDamagePercent||100)/100:1;
- return{hs:Math.pow(HS,Tb-1)*E.hp*L.hp*sh,bhs:Math.pow(BHS,Tb-1)*E.hp*L.hp*sh,ds:Math.pow(DS,Tb-1)*E.dmg*L.dmg*sd}}
+ sh=sp?(SC.spikeHpPercent||100)/100:1,sd=sp?(SC.spikeDamagePercent||100)/100:1,sb=sp?(SC.spikeBossHpPercent||100)/100:1;   // spikeBossHpPercent: bosses only, on top
+ return{hs:Math.pow(HS,Tb-1)*E.hp*L.hp*sh,bhs:Math.pow(BHS,Tb-1)*E.hp*L.hp*sh*sb,ds:Math.pow(DS,Tb-1)*E.dmg*L.dmg*sd}}
 const CORE_PROBLEMS=[];
 /* Caps on the player's side: Speed, Spin, blades, projectiles per volley and the share of a hit Armor can block. A cap Legendary (Escape Velocity,
    Cyclone, Arsenal, Barrage, Adamant) removes one while you own it (uncapped()). Without a cap, rules.uncapped still keeps the physics sane. */
@@ -98,7 +98,8 @@ function ramTrace(b,dx,dy,n){let x=b.x,y=b.y;const r=b.r,pts=[[x,y]];
   if(!isFinite(t))break;t=Math.max(0,t);x+=dx*t;y+=dy*t;pts.push([x,y]);if(x<=r+.01||x>=AW-r-.01)dx=-dx;if(y<=r+.01||y>=AH-r-.01)dy=-dy}
  return pts}
 /* A ball stalled by a pocket: 0 for PK.stall seconds, then climbs back to 1 over PK.climb seconds. */
-function stallF(S,b){if(b.stall==null||!S.pockets)return 1;const k=S.t-b.stall,P=S.pockets;if(k<P.stall)return 0;const f=(k-P.stall)/P.climb;if(f>=1){b.stall=null;return 1}return f}
+function stallF(S,b){if(b.stall==null)return 1;const P=S.pockets||{},st=b.stallS!=null?b.stallS:(P.stall||0),cl=b.stallC!=null?b.stallC:(P.climb||1),k=S.t-b.stall;   // b.stallS/stallC: this stall's own lengths (The Samurai's cut)
+ if(k<st)return 0;const f=(k-st)/cl;if(f>=1){b.stall=null;b.stallS=b.stallC=null;return 1}return f}
 function endRam(b){b.ram=null;b.wind=0;b.ramPts=null;b.dashT=0}
 function ramTick(S,b,dt,v,freq){
  if(b.frozen>0||b.stun>0){if(b.ram||b.wind)endRam(b);return}
@@ -111,7 +112,7 @@ function ramTick(S,b,dt,v,freq){
 /* One of The Eight Ball's pool balls: n 1 to 7 solid, 9 to 15 striped. All the same size and HP; big ones (bigRadiusX, bigHpX) ram along
    marked paths. Bumping your ball shoves it with solidImpact or stripeImpact (and marks it as knocked, for the pockets). */
 function poolBall(S,n,x,y,big){const P=ENEMY.pool,pv=P.v,cols=DATA.theme.poolBalls||['#f2c230','#2457d6','#d83a3a','#7b3fb0','#f08a24','#22984a','#8a2a2a'];
- const e=spawnEnemy(S,'pool',x,y,{hp:P.hp*S.hs*(big?pv.bigHpX:1),r:P.r*(big?pv.bigRadiusX:1)});e.num=n;e.stripe=n>8;e.col=cols[(n>8?n-9:n-1)%cols.length];
+ const e=spawnEnemy(S,'pool',x,y,{hp:P.hp*S.hs*(big?pv.bigHpX:1)*(n>8?(pv.stripeHpX||1):1),r:P.r*(big?pv.bigRadiusX:1)});e.num=n;e.stripe=n>8;if(e.stripe)e.armor+=(pv.stripeArmor||0)*S.ds;e.col=cols[(n>8?n-9:n-1)%cols.length];
  e.impact=e.stripe?pv.stripeImpact:pv.solidImpact;e.big=!!big;e.vx=e.vy=0;e.pause=pv.rackPause;if(big)e.m=e.r*e.r/324;return e}
 function ramWall(S,b,v){if(b.ram&&++b.ram.n>=v.ramBounces)endRam(b)}
 const ENEMY_CODE={
@@ -198,11 +199,42 @@ const BOSS_CODE={
   copy(S,b,v,i){const a=S.lock?null:S.run.augs[i];if(i>0)setOff(S,[a]);const d=a&&AUG[a.id],k=1+(d?(d.rar+1)*v.perRarityPercent/100:0);b.ws.forEach((w,j)=>w.pow=b.basePow[j]*k);b.body=b.baseBody*k;
    S.bossNote=d?tpl(DATA.text.copying||'Copying {name}',{name:d.name}):''},
   phase2(S,b,v){BOSS_CODE.reflect.copy(S,b,v,1);b.ph=2},tick(S,b,dt,v){if(b.ph===2&&b.hp<b.maxhp*.25){b.ph=3;BOSS_CODE.reflect.copy(S,b,v,2);fx(S,{k:'ring',x:b.x,y:b.y,r:110,col:b.col})}}},
- magnet:{tick(S,b,dt,v){const p=S.player,dx=b.x-p.x,dy=b.y-p.y,d=Math.hypot(dx,dy)||1;let f=v.pull*(1+v.closeBonusPercent/100*Math.max(0,1-d/v.closeRange));
-   if(b.p2){b.ft=(b.ft||0)+dt;if(b.ft>=v.flipEvery){b.ft=0;b.rev=!b.rev;fx(S,{k:'ring',x:b.x,y:b.y,r:150,col:b.rev?'#7fdcff':b.col});snd(S,'zap');S.bossNote=b.rev?DATA.text.magnetPush||'Pushing':DATA.text.magnetPull||'Pulling'}}
-   const sg=b.rev?-1:1;p.vx+=dx/d*f*dt*sg;p.vy+=dy/d*f*dt*sg;
-   if(b.rev)for(const e of S.balls)if(e.alive&&e.team===1&&e!==b){const ex=b.x-e.x,ey=b.y-e.y,ed=Math.hypot(ex,ey)||1;e.vx+=ex/ed*v.pull*dt;e.vy+=ey/ed*v.pull*dt}},
-  phase2(S,b,v){b.ft=v.flipEvery}},
+ /* The Magnet. Phase 1: pulls your ball in, harder up close. Phase 2: every flipEvery seconds it pushes, and a push is its hold move: your ball is
+    held in place (the Talisman blocks it) while your projectiles in flight (and any you fire meanwhile) and your Minis are sucked onto it. When they
+    have all arrived, or after holdSeconds if you have none, or at holdMaxSeconds at the latest, it shoots your ball away at launchSpeed. Each wall
+    bounce of the launch (launchBounces of them) hurts you for launchDamage (scaled by tier), +perCaughtPercent% for each projectile and Mini caught.
+    Caught projectiles are used up; Minis are let go. Meanwhile it pulls its allies in. */
+ magnet:{tick(S,b,dt,v){const p=S.player,dx=b.x-p.x,dy=b.y-p.y,d=Math.hypot(dx,dy)||1,M=BOSS_CODE.magnet,T=DATA.text;
+   if(b.hold){M.holding(S,b,dt,v);return}
+   if(b.launchN>0&&S.t>b.launchEnd)b.launchN=0;
+   if(b.p2&&!(b.launchN>0)){b.ft=(b.ft||0)+dt;if(b.ft>=v.flipEvery&&!(b.frozen>0)){b.ft=0;M.startHold(S,b,v);return}}
+   let f=v.pull*(1+v.closeBonusPercent/100*Math.max(0,1-d/v.closeRange));if(b.launchN>0)f=0;
+   p.vx+=dx/d*f*dt;p.vy+=dy/d*f*dt},
+  startHold(S,b,v){const p=S.player;if(S.talisman){S.bossNote=DATA.text.talismanBlocked||'Talisman';fx(S,{k:'ring',x:b.x,y:b.y,r:150,col:'#7fdcff'});return}
+   b.hold={t:0,caught:0,mini:new Set(),hv:[p.vx,p.vy]};p.held=1;fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+30,col:'#7fdcff'});fx(S,{k:'zap',x1:b.x,y1:b.y,x2:p.x,y2:p.y});snd(S,'zap');count(S,'magnetHolds');
+   S.bossNote=DATA.text.magnetHold||'Held'},
+  holding(S,b,dt,v){const H=b.hold,p=S.player,R=p.r+(v.clumpRadius||22);H.t+=dt;p.pause=Math.max(p.pause||0,dt*2);p.vx=p.vy=0;
+   if(!p.alive){b.hold=null;return}
+   let left=0;
+   for(const q of S.projs){if(q.dead||q.team!==0)continue;const qx=p.x-q.x,qy=p.y-q.y,qd=Math.hypot(qx,qy)||1;
+    if(qd<R){q.dead=true;H.caught++;fx(S,{k:'spark',x:q.x,y:q.y});continue}
+    left++;const sp=Math.max(v.suckSpeed,Math.hypot(q.vx,q.vy));q.vx=qx/qd*sp;q.vy=qy/qd*sp;q.ang=Math.atan2(q.vy,q.vx);q.life=Math.max(q.life,1);q.bn=Math.max(q.bn||0,1)}
+   for(const m of S.balls){if(!m.alive||!m.mini)continue;const mx=p.x-m.x,my=p.y-m.y,md=Math.hypot(mx,my)||1;
+    if(md<R+m.r){if(!H.mini.has(m.id)){H.mini.add(m.id);H.caught++}m.vx*=.5;m.vy*=.5;continue}
+    left++;m.vx=mx/md*v.suckSpeed;m.vy=my/md*v.suckSpeed}
+   for(const e of S.balls)if(e.alive&&e.team===1&&e!==b){const ex=b.x-e.x,ey=b.y-e.y,ed=Math.hypot(ex,ey)||1;e.vx+=ex/ed*v.pull*dt;e.vy+=ey/ed*v.pull*dt}
+   if(H.t%.5<dt)fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+14+Math.min(30,H.caught*3),col:'#7fdcff'});
+   S.bossNote=H.caught?tpl(DATA.text.magnetCaught||'Held: {n} caught',{n:H.caught}):(DATA.text.magnetHold||'Held');
+   const done=H.t>=v.holdMaxSeconds||(left===0&&(H.caught>0?H.t>=v.holdMinSeconds:H.t>=v.holdSeconds));
+   if(done)BOSS_CODE.magnet.launch(S,b,v)},
+  launch(S,b,v){const H=b.hold,p=S.player;b.hold=null;p.held=0;p.pause=0;
+   const dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy)||1;p.vx=dx/d*v.launchSpeed;p.vy=dy/d*v.launchSpeed;p.dashT=v.launchSeconds;p.dashX=v.launchSpeed/Math.max(1,p.spd);p.stall=null;
+   b.launchN=v.launchBounces;b.launchEnd=S.t+v.launchSeconds;b.launchDmg=v.launchDamage*S.ds*(1+v.perCaughtPercent/100*H.caught);b.ft=0;
+   fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+40,col:b.col});fx(S,{k:'burst',x:p.x,y:p.y,col:'#7fdcff',n:20});snd(S,'impact');count(S,'magnetLaunches');if(H.caught)count(S,'magnetCaught',H.caught);
+   S.bossNote=''},
+  onPlayerBounce(S,p,v){const b=S.boss;if(!b||!(b.launchN>0)||S.t>b.launchEnd)return;b.launchN--;const hp=p.hp;enemyHit(S,b,p,b.launchDmg);
+   fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+20,col:b.col});snd(S,'impact');count(S,'launchHits');if(b.launchN<=0)p.dashT=Math.min(p.dashT,.2)},
+  phase2(S,b,v){b.ft=v.flipEvery-1}},
  nullb:{disablesTopAugment:true,offAtStart:run=>[run.augs[0]],
   onSpawn(S,b,v){b.idx=0;S.bossNote=S.lock?DATA.text.padlocked||'Padlocked':tpl(DATA.text.nullSocket||'Socket {n} off',{n:1})},
   tick(S,b,dt,v){const n=S.run.augs.length;if(n<2||S.lock)return;b.mt=(b.mt||0)+dt;if(b.mt<v.moveEvery)return;b.mt=0;b.idx=(b.idx+1)%n;
@@ -210,6 +242,11 @@ const BOSS_CODE={
    S.bossNote=tpl(DATA.text.nullSocket||'Socket {n} off',{n:b.p2?(b.idx+1)+'+'+((b.idx+1)%n+1):b.idx+1})},
   phase2(S,b,v){const n=S.run.augs.length;if(n<2||S.lock)return;setOff(S,[S.run.augs[b.idx],S.run.augs[(b.idx+1)%n]]);S.bossNote=tpl(DATA.text.nullSocket||'Socket {n} off',{n:(b.idx+1)+'+'+((b.idx+1)%n+1)})}},
  glacier:{noChill:true,   // your own hits on it slow you: a stack each, all gone slowSeconds after your last hit (the Talisman blocks it)
+  /* Touching it Chills your ball (contactChill stacks, at most every contactCooldown s; Chill slows your ball and blades); at freezeAt stacks you are
+     Frozen for contactFreeze s. Your Chill fades like an enemy's. The Talisman blocks it. */
+  onContact(S,b,p,v){if(S.talisman||!p.alive||p.frozen>0||S.t<(p.gcd||0))return;p.gcd=S.t+v.contactCooldown;p.chill=(p.chill||0)+v.contactChill;count(S,'chillTaken',v.contactChill);
+   fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+8,col:DATA.theme.effects.freeze||'#d9f4ff'});
+   if(p.chill>=v.freezeAt){p.chill=0;p.frozen=v.contactFreeze;count(S,'frozenTaken');fx(S,{k:'burst',x:p.x,y:p.y,col:DATA.theme.effects.freeze||'#d9f4ff',n:16});snd(S,'zap')}},
   hitTaken(S,b,c,v){if(S.talisman||!/^(weapon|body|proj)$/.test(c.src)||S.hitOwner)return;b.slowN=(b.slowN||0)+1;b.slowT=S.t+(v.slowSeconds||3);S.chill=Math.max(v.slowestPercent/100,1-b.slowN*v.slowPercent/100);if(b.slowN===1||b.slowN%3===0)fx(S,{k:'ring',x:S.player.x,y:S.player.y,r:S.player.r+12,col:DATA.theme.effects.freeze||'#d9f4ff'})},
   tick(S,b,dt,v){if(b.slowN&&S.t>=b.slowT){b.slowN=0;S.chill=1}},
   taken(S,b,amt,kind,type,v){return kind==='burn'?amt*v.burnTakenX:amt},
@@ -222,7 +259,7 @@ const BOSS_CODE={
    p.hp-=d;p.flash=.1;text(S,p.x,p.y-p.r,d,'burn');if(hot)fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+14,col:DATA.theme.damageText.burn});if(p.hp<=0)playerDown(S)},
   taken(S,b,amt,kind,type,v){if(kind==='burn'){if(v.burnHealPercent>0)heal(S,b,amt*v.burnHealPercent/100);return 0}return amt},   // burnHealPercent above 0 makes Burn heal it
   phase2(S,b,v){b.wt=v.rotateEvery},tick(S,b,dt,v){if(!b.p2)return;b.wt+=dt;if(b.wt<v.rotateEvery)return;b.wt=0;const a=rnd(S.rsrc)*4|0;let c=rnd(S.rsrc)*3|0;if(c>=a)c++;S.hotWalls=[a,c]}},
- storm:{tick(S,b,dt,v){b.st=(b.st||0)+dt;if(b.st>=v.strikeEvery){b.st=0;const p=S.player,n=1+Math.min(v.maxExtra,b.extra||0)+(b.p2?1:0);b.extra=0;
+ storm:{tick(S,b,dt,v){b.st=(b.st||0)+dt;if(b.st>=v.strikeEvery){b.st=0;const p=S.player,n=(v.strikeCount||1)+Math.min(v.maxExtra,b.extra||0)+(b.p2?1:0);b.extra=0;
    for(let i=0;i<n;i++)S.marks.push({x:clamp(p.x+p.vx*.5+(rnd(S.rsrc)-.5)*(90+i*40),40,AW-40),y:clamp(p.y+p.vy*.5+(rnd(S.rsrc)-.5)*(90+i*40),40,AH-40),r:v.radius,t:v.warning,t0:v.warning,pow:v.damage*S.ds,src:b})}
    /* Lightning arrow: bounces off walls, passes through your balls, hits and Shocks them. Its Ramp is the Bow's: more arrows per volley. */
    if(v.arrowEvery&&!(b.frozen>0)){b.at=(b.at||0)+dt;if(b.at>=v.arrowEvery&&S.player.alive){b.at=0;const p=S.player,a0=Math.atan2(p.y-b.y,p.x-b.x),nv=Math.min(RULES.projectiles.maxPerVolley,(v.arrowCount||1)+Math.floor(b.arr||0));
@@ -242,12 +279,13 @@ const BOSS_CODE={
     Burst damage staggers it (taken). Debuff while it lives: no lifesteal (S.noLeech) and Regen cut (S.regenX); the Talisman blocks it. */
  samurai:{onSpawn(S,b,v){b.ait=v.every*.5;b.seq=0;b.dlog=[];if(S.talisman){S.bossNote=DATA.text.talismanBlocked||'Talisman';return}S.noLeech=true;S.regenX=1-v.regenCutPercent/100},
   endSlash(b){b.slash=null;b.wind=0;b.ramPts=null;b.dashT=0},
-  start(S,b,v){const p=S.player,dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy)||1,w=b.p2?v.windupPhase2:v.windup;b.sDir=[dx/d,dy/d];b.ramPts=ramTrace(b,dx/d,dy/d,v.dashBounces);b.wind=1;b.pause=w;b.tele=w},
+  start(S,b,v){const p=S.player,w=b.p2?v.windupPhase2:v.windup,d0=Math.hypot(p.x-b.x,p.y-b.y),k=stallF(S,p),tt=(w+d0/v.dashSpeed)*(v.leadPercent||0)/100;   // aims where you will be: leadPercent of the way
+   const tx=clamp(p.x+p.vx*k*tt,p.r,AW-p.r),ty=clamp(p.y+p.vy*k*tt,p.r,AH-p.r),dx=tx-b.x,dy=ty-b.y,d=Math.hypot(dx,dy)||1;b.sDir=[dx/d,dy/d];b.ramPts=ramTrace(b,dx/d,dy/d,v.dashBounces);b.wind=1;b.pause=w;b.tele=w},
   next(S,b,v){BOSS_CODE.samurai.endSlash(b);b.seq--;if(b.seq>0)b.gap=v.between;else if(S.bossNote===(DATA.text.samuraiDraw||'Drawing'))S.bossNote=''},
   cut(S,b,o,v){const amt=o.maxhp*v.hpPercent/100;if(o.inv>0)return;
    if(IMP&&S.juice&&o.player){S.fx.push({k:'impact',pct:1e4,x:o.x,y:o.y,dmg:amt});S.hold=true}   // the biggest impact frame on your ball
    enemyHit(S,b,o,amt,true);count(S,'slashHits');fx(S,{k:'ring',x:o.x,y:o.y,r:o.r+22,col:b.col});fx(S,{k:'burst',x:o.x,y:o.y,col:b.col,n:16});snd(S,'impact');
-   if(o.alive){knock(S,o,b.x,b.y,v.knock);o.knockT=S.t}},
+   if(o.alive){if(v.stallSeconds!=null){o.stall=S.t;o.stallS=v.stallSeconds;o.stallC=v.climbSeconds;o.knockT=null}else{knock(S,o,b.x,b.y,v.knock);o.knockT=S.t}}},   // stopped dead, then speeds back up (faster than a pocket)
   tick(S,b,dt,v){const C=BOSS_CODE.samurai,stag=S.t<(b.stagUntil||0);
    if(!stag&&S.bossNote===(DATA.text.samuraiStagger||'Staggered'))S.bossNote='';
    if(b.frozen>0||stag){if(b.slash||b.wind)C.endSlash(b);if(stag)b.seq=0;return}   // staggered or Frozen: the slashes are cancelled
@@ -289,7 +327,10 @@ const BOSS_CODE={
    if(n>0&&!S.talisman){p.ws.splice(p.ws.length-n,n);P.blades=p.ws.length;if(W.type==='bow')p.ws.forEach((w,i)=>{w.side=wOpt(W,i,p.ws.length,0).side});else p.ws.forEach((w,i)=>{w.ang=i*TAU/p.ws.length});
     for(let i=0;i<n;i++)b.ws.push(mkW(W.type,Math.max(3,P.pow*v.stealPowerPercent/100),Math.min(P.reach,v.maxReach),Math.min(P.spin,v.maxSpin),{ang:Math.PI+i*TAU/n,dir:-1,every:v.bowFireEvery}));
     b.stole=n;S.bossNote=n===1?(DATA.text.thiefStoleOne||'Stole 1 weapon'):tpl(DATA.text.thiefStole||'Stole {n} weapons',{n});fx(S,{k:'zap',x1:p.x,y1:p.y,x2:b.x,y2:b.y});count(S,'stolen',n)}
-   else{const bw=DATA.bosses.thief.baseWeapon||{type:'dagger',power:9,reach:38,spin:8};b.ws.push(mkW(bw.type,bw.power*S.ds,bw.reach,bw.spin,{ang:rnd(S.rsrc)*TAU}));S.bossNote=n>0?(DATA.text.talismanBlocked||'Talisman'):(DATA.text.thiefOwn||'Nothing to steal')}},
+   else{const bw=DATA.bosses.thief.baseWeapon||{type:'dagger',power:9,reach:38,spin:8};b.ws.push(mkW(bw.type,bw.power*S.ds,bw.reach,bw.spin,{ang:rnd(S.rsrc)*TAU}));
+    let a=null;if(!S.talisman&&!S.lock&&!(n>0))for(const x of S.run.augs)if(AUG[x.id]&&(!a||AUG[x.id].rar>AUG[a.id].rar))a=x;   // no bonus weapon: your highest-rarity augment, the top one on a tie
+    if(a){setOff(S,[a]);const k=1+(AUG[a.id].rar+1)*v.augPerRarityPercent/100;for(const w of b.ws)w.pow*=k;b.body*=k;b.stoleAug=a.id;S.bossNote=tpl(DATA.text.thiefStoleAug||'Stole {name}',{name:AUG[a.id].name});fx(S,{k:'zap',x1:p.x,y1:p.y,x2:b.x,y2:b.y});count(S,'stolenAug')}
+    else S.bossNote=n>0||S.talisman?(DATA.text.talismanBlocked||'Talisman'):S.lock&&S.run.augs.length?(DATA.text.padlocked||'Padlocked'):(DATA.text.thiefOwn||'Nothing to steal')}},
   phase2(S,b,v){const k=1+v.ragePercent/100;b.spd*=k;for(const w of b.ws){w.spin*=k;if(w.spin0b)w.spin0b*=k}}},
  /* The Eight Ball: invulnerable while any of its balls live. It racks with the 7 solids; clearing them costs it clearPercent of its Max HP and the
     7 stripes arrive (bigCount of them big, ramming along marked paths). Once they are gone it is alone, and can be pocketed. */
@@ -375,7 +416,7 @@ const AUG_CODE={
  gyro:{stats(a,S,P,v){P.spin*=1+v.percent/100}},
  handle:{stats(a,S,P,v){P.reach*=1+v.percent/100}},
  combo:{onHit(a,S,c,v){if(S.t-(a.f.t==null?-9:a.f.t)<v.window)a.f.m=(a.f.m||0)+v.mult;else a.f.m=0;a.f.t=S.t;if(a.f.m){c.mult+=a.f.m;return true}},live:(a,S,v)=>a.f.m&&S.t-a.f.t<v.window?'+'+f1(a.f.m)+' '+DATA.text.statNames.mult:''},
- twin:{stats(a,S,P,v){if(P.W.fist)P.pow+=v.fistPower;else P.blades+=v.blades}},
+ twin:{stats(a,S,P,v){if(P.W.fist){for(const k in P.W.rampDef)if(k!=='maxSpeedBonusPercent'){P.rampAdd[k]=(P.rampAdd[k]||0)+v.fistRamp;break}}else P.blades+=v.blades}},   // Bare Fists: +fistRamp to its Ramp step
  centri:{onHit(a,S,c,v){const w=S.player.ws[0];if(w&&w.spin>0){c.power+=Math.min(v.max,w.spin*v.power);return true}},live:(a,S,v)=>{const w=S.player.ws[0];return w&&w.spin>0?'+'+f1(Math.round(Math.min(v.max,w.spin*v.power)*10)/10):''}},   // capped at max
  parry:{onParry(a,S,e,v){playerHit(S,e,'aoe',v.powerPercent/100);return true}},
  glass:{stats(a,S,P,v){P.hp*=v.hpPercent/100},onHit(a,S,c,v){c.mult*=v.mult;return true}},
@@ -716,12 +757,22 @@ const TROPHY_CODE={
  edge:{stats(t,S,P,v){P.mult+=v.mult}},
  tonic:{stats(t,S,P,v){P.crit+=v.critPercent/100;P.regen+=v.regen}},
  pack:{onStart(t,S,x,v){for(let i=0;i<v.count;i++)spawnMini(S);return true}},
+ /* Legendary trophies ("legendary": true in the data): offered only after a boss in endless mode. many: can be taken again. Gold, the ticket,
+    the satchel and sockets act when picked (pickTrophy); the rest are big versions of the normal trophies, checked by id where those are. */
+ arm:{many:1,stats(t,S,P,v){if(P.W.fist){for(const k in P.W.rampDef)if(k!=='maxSpeedBonusPercent'){P.rampAdd[k]=(P.rampAdd[k]||0)+v.fistRamp;break}}else P.blades+=v.blades}},
+ chest:{many:1},ticket:{many:1},satchel:{many:1},socketL:{many:1},shelfL:{},bankerL:{},couponL:{},weakL:{},recycleL:{},tasteL:{},
+ engineL:{stats(t,S,P,v){P.spd*=1+v.percent/100;P.spin*=1+v.percent/100}},
+ hideL:{stats(t,S,P,v){P.hp+=v.hp;P.armor+=v.armor}},
+ edgeL:{stats(t,S,P,v){P.mult+=v.mult}},
+ tonicL:{stats(t,S,P,v){P.crit+=v.critPercent/100;P.regen+=v.regen}},
+ packL:{onStart(t,S,x,v){for(let i=0;i<v.count;i++)spawnMini(S);return true}},
 };
 const TROPHY={};
 for(const id of dkeys(DATA.trophies)){const d=DATA.trophies[id];
  if(!TROPHY_CODE[id])CORE_PROBLEMS.push('trophies.'+id+' is in game-data.json but has no code in core.js (TROPHY_CODE).');
- TROPHY[id]=Object.assign({id,name:d.name,desc:tpl(d.text,d.values),v:d.values||{},tags:d.tags||[],weight:d.weight==null?1:d.weight},TROPHY_CODE[id]||{})}
+ TROPHY[id]=Object.assign({id,name:d.name,desc:tpl(d.text,d.values),v:d.values||{},tags:d.tags||[],weight:d.weight==null?1:d.weight,legendary:!!d.legendary},TROPHY_CODE[id]||{})}
 const has=(run,id)=>run.trophies.includes(id)&&!!TROPHY[id];
+const nHas=(run,id)=>TROPHY[id]?run.trophies.filter(x=>x===id).length:0;   // how many times a trophy was taken (legendary ones can repeat)
 
 /* ---------- 4. sources and hook dispatch ---------- */
 /* A source is anything that changes the player's stats or reacts to fight events: augments, trophies, and later passives, relics, consumables...
@@ -747,6 +798,7 @@ const ITEM_CODE={
  aegis:{onTick(t,S,dt,v){const p=S.player;if(t.f.u||p.hp>p.maxhp*v.hpPercent/100)return;t.f.u=1;p.inv=Math.max(p.inv,v.seconds);fx(S,{k:'ring',x:p.x,y:p.y,r:p.r+30,col:DATA.theme.page.gold});snd(S,'coin');return true}},
  smoke:{onStart(t,S,x,v){for(const e of enemies(S))freeze(S,e,v.seconds);return true}},
  crystal:{},   // used from the bag in the shop: opens the Night Market (openMarket)
+ ticket:{},   // Free Shop Ticket (legendary trophy): used from the bag in the shop (useTicket)
  growth:{stats(t,S,P,v){inc(P,'size',v.percent/100)}},
  minibox:{onStart(t,S,x,v){for(let i=0;i<v.count;i++)spawnMini(S);return true}},
  twinkit:{stats(t,S,P,v){P.bladesPastCap=(P.bladesPastCap||1)*v.mult}},   // applied after the blade cap in calcPlayer
@@ -759,9 +811,18 @@ const ITEM={};
 for(const id of dkeys(DATA.consumables||{})){const d=DATA.consumables[id];if(!ITEM_CODE[id])CORE_PROBLEMS.push('consumables.'+id+' is in game-data.json but has no code in core.js (ITEM_CODE).');
  ITEM[id]=Object.assign({id,name:d.name,desc:tpl(d.text,d.values),cost:d.cost,v:d.values||{},tags:[],weight:d.weight==null?1:d.weight},ITEM_CODE[id]||{})}
 addSourceKind({kind:'item',stage:'early',list:run=>(run.active||[]).filter(id=>ITEM[id]).map(id=>({def:ITEM[id],st:srcState(run,'item:'+id),v:ITEM[id].v}))});
-function buyItem(run,i){const o=run.shop.items&&run.shop.items[i];if(!o||o.sold)return false;run.bag=run.bag||[];if(run.bag.length>=CONS.bagSize)return false;const c=ITEM[o.id].cost;if(run.gold<c)return false;run.gold-=c;o.sold=true;run.bag.push({id:o.id,use:false});return true}
-function toggleItem(run,i){const b=run.bag&&run.bag[i];if(!b)return false;b.use=!b.use;return true}
-function sellItem(run,i){const b=run.bag&&run.bag[i];if(!b)return false;run.gold+=Math.floor(ITEM[b.id].cost/2);run.bag.splice(i,1);return true}
+function buyItem(run,i){const o=run.shop.items&&run.shop.items[i];if(!o||o.sold)return false;run.bag=run.bag||[];if(run.bag.length>=bagSize(run))return false;const c=itemCost(run,o.id);if(run.gold<c)return false;run.gold-=c;o.sold=true;run.bag.push({id:o.id,use:false});return true}
+function toggleItem(run,i){const b=run.bag&&run.bag[i];if(!b||b.aug)return false;b.use=!b.use;return true}
+function sellItem(run,i){const b=run.bag&&run.bag[i];if(!b)return false;run.gold+=b.aug?sellValue(run,b.aug):Math.floor(ITEM[b.id].cost/2);run.bag.splice(i,1);return true}
+/* Bagging an augment: buy a shop augment into the item bag instead of a socket (one bagged augment at a time; it takes a bag slot and does nothing
+   there). Socket it later from the bag when there is room (unbagAug). Bag entry: {aug: id}. */
+function bagAug(run,i){const o=run.shop.offers[i];run.bag=run.bag||[];if(!o||o.sold||run.bag.length>=bagSize(run)||run.bag.some(x=>x.aug))return false;const c=augCost(run,o.id);if(run.gold<c)return false;
+ run.gold-=c;o.sold=true;run.bag.push({aug:o.id});return true}
+function unbagAug(run,i){const b=run.bag&&run.bag[i];if(!b||!b.aug||run.augs.length>=run.slots)return false;run.bag.splice(i,1);run.augs.push(b.keep||{id:b.aug,n:0,f:{}});return true}
+function canBag(run){run.bag=run.bag||[];return run.bag.length<bagSize(run)&&!run.bag.some(x=>x.aug)}   // room in the bag, and no augment bagged yet
+function bagOwned(run,i){const a=run.augs[i];if(!a||!canBag(run))return false;run.augs.splice(i,1);run.bag.push({aug:a.id,keep:a});return true}   // an owned augment into the bag (keeps its growth)
+/* The Free Shop Ticket (legendary trophy, used from the bag in the shop): everything in the current shop costs $0 until it is rerolled or replaced. */
+function useTicket(run,i){const b=run.bag&&run.bag[i];if(!b||b.id!=='ticket'||!run.shop||run.shop.free)return false;run.bag.splice(i,1);run.shop.free=true;return true}
 /* Void augments (run.void, ids): no socket, can't be sold, run after every augment. The Night Market (Crystal Ball item) offers up to 4 of them. */
 const VOID_RAR=DATA.rarities.findIndex(r=>r.void);
 const isVoid=id=>!!AUG[id]&&AUG[id].rar===VOID_RAR;
@@ -889,9 +950,9 @@ function newFight(run,o){
   vis:!!(o.juice||o.preview),juice:!!o.juice,preview:!!o.preview,kills:0,dmg:0,bestHit:0,pulses:[],last:null,bounces:0,lastBounce:-9,gold:0,chill:1,disabled:null,boss:null,bossDef:null,
   ramp:{pow:0,mult:0,spin:1,reach:0,arrows:0,hits:0,spd:0,crit:0,critOver:2},count:{},over:{spd:0,spin:0},src:null,cur:null,dmgBy:{},trig:{},hitStat:{},dynStat:{},hookHits:0,hitKey:null,hitOwner:null,miniBounce:0,miniTouch:0,miniHunt:0,miniHuntShare:0,ice:[],pockets:null,bossNote:'',hotWalls:null,off:null};
  const T=run.tier,enc=run.enc;
- {const wk=has(run,'weak')?1-TROPHY.weak.v.percent/100:1,Z=tierScale(T);S.hs=Z.hs*wk;S.bhs=Z.bhs*wk*(T===1?(RULES.scaling.firstBossHpPercent||100)/100:1);S.ds=Z.ds}
+ {const wk=(has(run,'weak')?1-TROPHY.weak.v.percent/100:1)*(has(run,'weakL')?1-TROPHY.weakL.v.percent/100:1),Z=tierScale(T);S.hs=Z.hs*wk;S.bhs=Z.bhs*wk*(T===1?(RULES.scaling.firstBossHpPercent||100)/100:1);S.ds=Z.ds}
  S.refHp=IMP?(IMP.minReferenceHp||0)*S.hs:0;S.hold=false;S.endlessFight=T>RULES.run.tiersToWin;
- if(!S.preview&&!o.keepItems){run.active=(run.bag||[]).filter(x=>x.use&&ITEM[x.id]&&x.id!=='crystal').map(x=>x.id);run.bag=(run.bag||[]).filter(x=>!x.use||x.id==='crystal')}   // items switched on are used up now
+ if(!S.preview&&!o.keepItems){run.active=(run.bag||[]).filter(x=>x.use&&ITEM[x.id]&&x.id!=='crystal').map(x=>x.id);run.bag=(run.bag||[]).filter(x=>!x.use||x.id==='crystal')}   // bagged augments (x.aug) are never "used"   // items switched on are used up now
  S.lock=!S.preview&&(run.active||[]).includes('padlock');S.talisman=!S.preview&&(run.active||[]).includes('talisman');
  S.off=new Set();{const bc=enc.boss&&BOSS[enc.boss]&&BOSS[enc.boss].code;if(bc&&bc.offAtStart&&!S.preview&&!S.lock)for(const a of bc.offAtStart(run,BOSS[enc.boss].v))if(a)S.off.add(a)}S.disabled=[...S.off][0]||null;   // The Null and The Reflection switch sockets off
  for(const a of run.augs){a.f={};if(a.sh)a.sh.f={}}
@@ -1104,7 +1165,7 @@ function step(S,dt){
     else if(e.team===1){if(others)continue;e.pocketT=S.t+PK.bossCooldown;e.knockT=null;   // the Eight Ball: only when it is the last ball; hurts, never kills
      const amt=Math.min(e.maxhp*PK.bossPercent/100,e.hp-1);if(amt>0){const ar=e.armor;e.armor=0;S.hitKey='src:pocket';damage(S,e,amt,'aoe');S.hitKey=null;e.armor=ar}
      const dx=AW/2-e.x,dy=AH/2-e.y,dd=Math.hypot(dx,dy)||1;e.vx=dx/dd*e.spd*2;e.vy=dy/dd*e.spd*2;fx(S,{k:'burst',x:bx,y:by,col:DATA.theme.page.chalk,n:24});fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+20,col:DATA.theme.page.gold});snd(S,'impact');count(S,'bossPocketed')}
-    else if(e.player||e.twin){e.knockT=null;e.pocketT=S.t+PK.stall+PK.climb;e.stall=S.t;fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+14,col:DATA.theme.page.mult});snd(S,'hurt');count(S,'stalled')}}}   // your ball: stops dead, then speeds back up
+    else if(e.player||e.twin){e.knockT=null;e.pocketT=S.t+PK.stall+PK.climb;e.stall=S.t;e.stallS=e.stallC=null;fx(S,{k:'ring',x:e.x,y:e.y,r:e.r+14,col:DATA.theme.page.mult});snd(S,'hurt');count(S,'stalled')}}}   // your ball: stops dead, then speeds back up
   if(P.regen>0){const rg=P.regen*(S.regenX==null?1:S.regenX);heal(S,pl,rg*dt,true);for(const b of S.balls)if(b.twin&&b.alive)heal(S,b,rg*dt,true);if(P.miniRegen>0)for(const b of S.balls)if(b.mini&&b.alive)heal(S,b,rg*P.miniRegen*dt,true)}   // Lifeline: Minis share your Regen. S.regenX: The Samurai's Regen cut
   S.statusAcc+=dt;
   if(S.statusAcc>=.5){S.statusAcc-=.5;
@@ -1118,6 +1179,7 @@ function step(S,dt){
     if(e.alive&&e.chill>0)e.chill=Math.max(0,e.chill-.5*ST.chillFadePerSecond);
     if(e.alive&&e.shock>0)e.shock=Math.max(0,e.shock-.5*ST.shockFadePerSecond)}
    for(const b of S.balls)if(b.alive&&b.team===0&&b.shock>0)b.shock=Math.max(0,b.shock-.5*ST.shockFadePerSecond);   // Shock on your side fades too
+   for(const b of S.balls)if(b.alive&&b.team===0&&b.chill>0)b.chill=Math.max(0,b.chill-.5*ST.chillFadePerSecond);   // and Chill (The Glacier)
    /* Siphon (augment siphon, P.siphon): each regen tick, every ball of yours that regenerates (your ball, Mitosis twins, and Minis while they share
       your Regen) deals that tick's Regen to the enemy nearest it, as Siphon damage over time: ignores Armor, counts as a Status, boosted by Catalyst. */
    if(P.siphon&&P.regen>0){const tick=b=>{const sh=b.mini?P.miniRegen:1;if(!(sh>0))return;const e=nearestFoe(S,b);if(!e||e.team!==1||!e.alive||e.ward>S.t)return;
@@ -1183,6 +1245,7 @@ function step(S,dt){
      fire(S,'onCollide',{a,b,impact:vn});if(a.team===1&&b.team===1&&S.bossDef&&S.bossDef.code.onEnemyCollide)S.bossDef.code.onEnemyCollide(S,a,b,S.bossDef.v);if(S.done){exitHalf(S,tk);return}}}
    if(live&&a.team!==b.team){
     const p=a.team===0?a:b,e=a.team===0?b:a;
+    if(e.boss&&p.player&&S.bossDef&&S.bossDef.code.onContact)S.bossDef.code.onContact(S,e,p,S.bossDef.v);   // The Glacier's touch
     if(p.bcd<=0){p.bcd=CB.bodyHitCooldown;if(p.player||p.twin){S.hitOwner=p.twin?'twin':null;if(P.W.fist&&!P.noWeapon)playerHit(S,e,'body',1,null,true);S.hitOwner=null;fire(S,'onTouch',e)}else if(p.hut){}else{S.hitOwner=p.miniYou?'miniyou':null;const mp=S.t<S.miniHunt?Math.max(RULES.minis.powerPercent/100,S.miniHuntShare):RULES.minis.powerPercent/100;
      playerHit(S,e,'mini',p.miniYou?(P.W.fist?p.share:mp):mp*P.miniDmgX);S.hitOwner=null;
      if(e.alive&&P.miniKb>0)knockBy(S,e,p.x,p.y,pushStat(S)*P.miniKb);if(e.alive&&S.t<S.miniTouch)fire(S,'onTouch',e)}}   // Pack Training knock, Pack Hunt and Pack Contact windows
@@ -1275,14 +1338,16 @@ function genEnc(run){
  const enc={list};const EL=ELITE;if(T>=EL.fromTier&&list.length&&rnd(run)*100<EL.chancePercent){const c=list.map((k,i)=>i).filter(i=>list[i]!=='swarm');if(c.length)enc.elite={i:pick(run,c),mod:pick(run,ELITE_MODS)}}
  return enc;
 }
-function augCost(run,id){return Math.max(1,COST[AUG[id].rar]-(has(run,'coupon')?TROPHY.coupon.v.discount:0))}
-function sellValue(run,id){const c=COST[AUG[id].rar];return has(run,'recycle')?c:Math.floor(c*RULES.economy.sellPercent/100)}
-function tuneCost(run,k){return(TUNE[k].cost!=null?TUNE[k].cost:RULES.economy.tuneUpBaseCost)+(TUNE[k].costStep!=null?TUNE[k].costStep:RULES.economy.tuneUpCostStep)*(run.tune[k]||0)}   // cap tune-ups can set their own starting "cost"
+function augCost(run,id){if(run.shop&&run.shop.free)return 0;return Math.max(1,COST[AUG[id].rar]-(has(run,'coupon')?TROPHY.coupon.v.discount:0)-(has(run,'couponL')?TROPHY.couponL.v.discount:0))}   // shop.free: a Free Shop Ticket was used on this shop
+function sellValue(run,id){const c=COST[AUG[id].rar];return has(run,'recycleL')?Math.floor(c*TROPHY.recycleL.v.percent/100):has(run,'recycle')?c:Math.floor(c*RULES.economy.sellPercent/100)}
+function itemCost(run,id){return run.shop&&run.shop.free?0:ITEM[id].cost}
+function bagSize(run){return CONS.bagSize+((run&&run.bagX)||0)}   // the Big Satchel adds slots
+function tuneCost(run,k){if(run.shop&&run.shop.free)return 0;return(TUNE[k].cost!=null?TUNE[k].cost:RULES.economy.tuneUpBaseCost)+(TUNE[k].costStep!=null?TUNE[k].costStep:RULES.economy.tuneUpCostStep)*(run.tune[k]||0)}   // cap tune-ups can set their own starting "cost"
 /* needs "blade" (augments and tune-ups in the data): only offered to weapons with a blade or bow, not Bare Fists, where Spin, Reach and Knockback do nothing. */
 const fits=(run,d)=>!(d&&((d.needs==='blade'&&WEAPONS[run.weapon].fist)||(d.needs==='ranged'&&!(WEAPONS[run.weapon].type==='bow'||run.augs.some(x=>x.id==='sidearm'||x.id==='multi')))));   // ranged: Bow, or Sidearm or Multishot owned
 function rollShop(run,keepReroll){
- const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id)),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!isVoid(k)&&!(run.questsDone&&run.questsDone[k]));   // a finished quest is not offered again
- const w=DATA.rarities.map(r=>r.shopWeight+r.shopWeightPerTier*run.tier);if(has(run,'taste'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.taste.v.mult;   // Rare Taste: the third rarity (Rare) and every rarity above it
+ const n=RULES.run.shopAugments+run.shelf,owned=new Set(run.augs.map(a=>a.id).concat((run.bag||[]).filter(x=>x.aug).map(x=>x.aug))),offers=[],ids=Object.keys(AUG).filter(k=>fits(run,DATA.augments[k])&&!isVoid(k)&&!(run.questsDone&&run.questsDone[k]));   // a finished quest is not offered again
+ const w=DATA.rarities.map(r=>r.shopWeight+r.shopWeightPerTier*run.tier);if(has(run,'taste'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.taste.v.mult;if(has(run,'tasteL'))for(let i=2;i<w.length;i++)w[i]*=TROPHY.tasteL.v.mult;   // Rare Taste: the third rarity (Rare) and every rarity above it
  let tot=0;for(const x of w)tot+=x;
  const first=run.tier===1&&run.stage===0&&!run.endless,afford=c=>!first||c<=run.gold;   // the first shop only offers what you can afford
  for(let i=0;i<n;i++){let x=rnd(run)*tot,r=0;while(r<w.length-1&&x>=w[r]){x-=w[r];r++}
@@ -1294,12 +1359,13 @@ function rollShop(run,keepReroll){
  const tk=Object.keys(TUNE).filter(k=>TUNE[k].weight>0&&fits(run,DATA.tuneUps[k])&&!(TUNE[k].cap&&uncapped(run,TUNE[k].cap))&&!(TUNE[k].cap==='armor'&&capRaise(run,'armor')>=95-baseCap('armor'))&&afford(tuneCost(run,k))),tunes=[],nt=Math.min(tk.length,RULES.run.shopTuneUps);
  while(tunes.length<nt){const left=tk.filter(k=>!tunes.some(t=>t.k===k));let tw=0;for(const k of left)tw+=TUNE[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=TUNE[q].weight;if(x<0){k=q;break}}tunes.push({k,sold:false})}   // weighted: Hatchling is rarer
  const base=rerollBase(run);
- const ik=Object.keys(ITEM).filter(k=>fits(run,DATA.consumables[k])&&afford(ITEM[k].cost)),items=[];for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k)&&!(k==='crystal'&&!voidPool(run).length));if(!left.length)break;let tw=0;for(const k of left)tw+=ITEM[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=ITEM[q].weight;if(x<0){k=q;break}}items.push({id:k,sold:false})}   // weighted (items' "weight", default 1)
+ const ik=Object.keys(ITEM).filter(k=>ITEM[k].weight>0&&fits(run,DATA.consumables[k])&&afford(ITEM[k].cost)),items=[];   // weight 0: never in the shop (the Free Shop Ticket)
+ for(let i=0;i<Math.min(CONS.shopItems,ik.length);i++){const left=ik.filter(k=>!items.some(x=>x.id===k)&&!(k==='crystal'&&!voidPool(run).length));if(!left.length)break;let tw=0;for(const k of left)tw+=ITEM[k].weight;let x=rnd(run)*tw,k=left[0];for(const q of left){x-=ITEM[q].weight;if(x<0){k=q;break}}items.push({id:k,sold:false})}   // weighted (items' "weight", default 1)
  run.shop={offers,tunes,items,reroll:keepReroll?run.shop.reroll+RULES.economy.rerollCostStep:base};
 }
 /* Shop lock: a locked shop comes back after the next fight instead of a new one (sold slots stay sold). A shop that came back (kept) can't be
    locked again; the next new shop can. Rerolling makes a new shop, so it drops the lock. */
-function rerollBase(run){return has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost}
+function rerollBase(run){return has(run,'couponL')?TROPHY.couponL.v.rerollBase:has(run,'coupon')?TROPHY.coupon.v.rerollBase:RULES.economy.rerollBaseCost}
 function toggleLock(run){const sh=run.shop;if(!sh||sh.kept)return false;sh.locked=!sh.locked;return true}
 function buyOffer(run,i){const o=run.shop.offers[i];if(!o||o.sold||run.augs.length>=run.slots)return false;const c=augCost(run,o.id);if(run.gold<c)return false;run.gold-=c;o.sold=true;   // cap Legendaries: the cap is gone for the rest of the run
  run.augs.push({id:o.id,n:0,f:{}});return true}
@@ -1323,23 +1389,29 @@ function payout(run,S){
  return{lines,total};
 }
 /* Moves the run to the next fight. After a boss it also queues three trophies to pick from. */
+/* Endless mode starts (after the final boss): +endlessSlots sockets, past the socket cap. */
+function startEndless(run){if(run.endless)return false;run.endless=true;run.slots+=RULES.run.endlessSlots==null?1:RULES.run.endlessSlots;return true}
 function advance(run){
  run.active=[];
  if(run.stage===2){
-  const have=new Set(run.trophies),opts=Object.keys(TROPHY).filter(k=>TROPHY[k].many?run.slots<RULES.run.maxSlots:!have.has(k)),p=[];
+  const have=new Set(run.trophies),L=!!run.endless,opts=Object.keys(TROPHY).filter(k=>TROPHY[k].legendary===L&&(k==='socket'?run.slots<RULES.run.maxSlots:TROPHY[k].many||!have.has(k))),p=[];   // after an endless boss: legendary trophies only
   while(p.length<3&&opts.length){let tw=0;for(const q of opts)tw+=TROPHY[q].weight;let x=rnd(run)*tw,i=0;for(;i<opts.length-1;i++){x-=TROPHY[opts[i]].weight;if(x<0)break}p.push(opts.splice(i,1)[0])}   // weighted: Spare Socket shows up a little more often
-  run.pending=p.length?p:null;run.tier++;run.stage=0;run.grown=(run.grown||0)+1;if(!run.bosses[run.tier-1])run.bosses[run.tier-1]=pick(run,BOSS_POOL.concat(FINAL_BOSS));
+  run.pending=p.length?p:null;run.pendingL=L&&!!p.length;run.tier++;run.stage=0;run.grown=(run.grown||0)+1;if(!run.bosses[run.tier-1])run.bosses[run.tier-1]=pick(run,BOSS_POOL.concat(FINAL_BOSS));
  }else run.stage++;
  if(run.plan&&run.planTier===run.tier)run.enc=run.plan[run.stage];else planTier(run);
  if(run.shop&&run.shop.locked){run.shop.locked=false;run.shop.kept=true;run.shop.reroll=rerollBase(run)}else rollShop(run);   // a locked shop comes back once
 }
 function pickTrophy(run,id){
  if(!run.pending||!run.pending.includes(id))return false;
- run.trophies.push(id);run.pending=null;
+ run.trophies.push(id);run.pending=null;run.pendingL=false;const tv=TROPHY[id]&&TROPHY[id].v||{};
+ if(id==='socketL')run.slots+=tv.slots;if(id==='chest')run.gold+=tv.gold;if(id==='satchel')run.bagX=(run.bagX||0)+tv.slots;
+ if(id==='ticket'){run.bag=run.bag||[];for(let k=0;k<(tv.count||1);k++)run.bag.push({id:'ticket',use:false})}   // goes in the bag even if it is full
+ if(id==='bankerL')run.intCap=Math.max(run.intCap,tv.cap);if(id==='couponL')run.shop.reroll=Math.min(run.shop.reroll,tv.rerollBase);
+ if(id==='shelfL'){run.shelf+=tv.count-1;id='shelf'}
  if(id==='socket')run.slots++;if(id==='shelf'){run.shelf++;if(run.shop.locked||run.shop.kept){const keep=run.shop;rollShop(run);const extra=run.shop.offers.find(o=>!keep.offers.some(x=>x.id===o.id));run.shop=keep;if(extra)keep.offers.push(extra)}else{const r=run.shop.reroll;rollShop(run);run.shop.reroll=r}}   // a locked or kept shop just gains the extra slot
  if(id==='banker')run.intCap=TROPHY.banker.v.cap;if(id==='coupon')run.shop.reroll=Math.min(run.shop.reroll,TROPHY.coupon.v.rerollBase);
  return true;
 }
 
-const CORE={toggleLock,rerollBase,statView,shopState,openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
+const CORE={startEndless,bagAug,unbagAug,canBag,bagOwned,useTicket,bagSize,itemCost,nHas,toggleLock,rerollBase,statView,shopState,openMarket,pickVoid,voidPool,isVoid,VOID_RAR,rampWith,statusesApplied,LTN,capOf,baseCap,CAP_KEYS,shownMult,shopMult,ITEM,CONS,buyItem,toggleItem,sellItem,ENEMY_CODE,ELITE,isOff,setOff,DATA,RULES,AW,AH,TAU,WEAPONS,ENEMY,BOSS,AUG,TUNE,TROPHY,RAR,COST,CORE_PROBLEMS,tpl,rnd,newRun,newFight,step,calcPlayer,genEnc,planTier,encAt,endlessScale,short,addSourceKind,addChill,freeze,srcState,sourceLists,fire,inc,more,hasTag,count,rollShop,buyOffer,buyTune,reroll,sellAug,moveAug,moveAugTo,payout,advance,pickTrophy,augCost,sellValue,tuneCost,bossFor,seg,enemies,minis};
 if(typeof module!=='undefined')module.exports=CORE;

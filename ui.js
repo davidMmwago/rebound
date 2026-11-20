@@ -104,6 +104,9 @@ function pixelButtons(){
  st.setProperty('--pb-socket',pixShape(SD,SD,disc,{fill:mixHex(ink,'#ffffff',.03),line:P.drop,hi:'#000000',lo:mixHex(ink,'#ffffff',.14)}).up);
  st.setProperty('--pb-socket-hot',pixShape(SD,SD,disc,{fill:mixHex(ink,M,.12),line:M,hi:'#000000',lo:mixHex(ink,M,.35)}).up);
  st.setProperty('--pb-socket-on',pixShape(SD,SD,disc,{fill:M,line:P.drop,hi:mixHex(M,'#ffffff',.4),lo:mixHex(M,'#000000',.3)}).up);
+ const Y=P.gold;   // the bag's socket beside it: the same, in gold
+ st.setProperty('--pb-socket-hot-gold',pixShape(SD,SD,disc,{fill:mixHex(ink,Y,.12),line:Y,hi:'#000000',lo:mixHex(ink,Y,.35)}).up);
+ st.setProperty('--pb-socket-on-gold',pixShape(SD,SD,disc,{fill:Y,line:P.drop,hi:mixHex(Y,'#ffffff',.4),lo:mixHex(Y,'#000000',.3)}).up);
 }
 function pixelFrames(){
  const P=TH.page,st=document.documentElement.style,lt=c=>mixHex(c,'#ffffff',.1),dk=c=>mixHex(c,'#000000',.3);
@@ -114,7 +117,7 @@ function pixelFrames(){
  set('cell',{fill:P.ink,pad:1,inset:true,hi:mixHex(P.ink,'#ffffff',.06),lo:'#000000'});
  set('box',{fill:P.panel2,pad:1});
  set('item',{fill:'#1e3833',pad:1});
- set('btn',{fill:P.panel2,pad:1,shadow:true});
+ set('btn',{fill:P.panel2,pad:1,shadow:true});set('btn-gold',{fill:mixHex(P.panel2,P.gold,.18),line:P.gold,pad:1,shadow:true});   // legendary trophies
  set('pw',{fill:P.pow,pad:1,shadow:true});set('ml',{fill:P.mult,pad:1,shadow:true});set('dm',{fill:P.chalk,pad:1,shadow:true});set('dmhot',{fill:P.gold,pad:1,shadow:true});set('dmcrit',{fill:mixHex(P.gold,'#ffffff',.45),line:P.accent,pad:1,shadow:true});
  set('bar',{fill:P.ink,pad:0,inset:true,lo:'#000000',hi:mixHex(P.ink,'#ffffff',.06)});
  /* buttons (pad 0: slices 6, and 12 at the bottom for the shadow; the pressed copy -down is 12 at the top), chips, the arena rim, the hint bubble and
@@ -280,10 +283,13 @@ document.addEventListener('click',e=>{
   case'peek':if(G.phase!=='prep'||!run)return;{const k=+b.dataset.i;if(k<run.stage||k>2)return;G.peek=k===run.stage?null:k;previewFight();render();
    const el=$(G.peek==null?'.next [data-act="fight"]':'.next .step.sel');if(el)el.focus({preventScroll:true})}return;
   case'buy':ok=buyOffer(run,i);break;
+  case'bag-aug':ok=bagAug(run,i);break;   // buy a shop augment into the bag
   case'tune':ok=buyTune(run,i);break;
   case'item':ok=buyItem(run,i);break;
-  case'item-use':if(run.bag[i]&&run.bag[i].id==='crystal'){ok=openMarket(run,i);if(ok){G.sheetId=null;play('coin')}break}ok=toggleItem(run,i);break;
-  case'void-pick':ok=pickVoid(run,b.dataset.id);if(ok){refreshPreview();play('coin')}break;
+  case'item-use':if(run.bag[i]&&run.bag[i].aug){ok=unbagAug(run,i);if(ok)refreshPreview();break}   // a bagged augment: into a free socket
+   if(run.bag[i]&&run.bag[i].id==='ticket'){ok=useTicket(run,i);break}   // Free Shop Ticket: this shop costs nothing
+   if(run.bag[i]&&run.bag[i].id==='crystal'){ok=openMarket(run,i);if(ok){G.sheetId=null;play('coin')}break}ok=toggleItem(run,i);break;
+  case'void-pick':ok=pickVoid(run,b.dataset.id);if(ok)refreshPreview();break;
   case'item-sell':ok=sellItem(run,i);break;
   case'reroll':ok=reroll(run);break;
   case'lock':ok=toggleLock(run);break;
@@ -292,7 +298,7 @@ document.addEventListener('click',e=>{
   case'up':ok=moveAug(run,i,-1);if(ok)refocus=i-1>0?'#aug'+(i-1)+' [data-act="up"]':'#aug'+(i-1);break;
   case'down':ok=moveAug(run,i,1);if(ok)refocus=i+1<run.augs.length-1?'#aug'+(i+1)+' [data-act="down"]':'#aug'+(i+1);break;
   case'continue':toPrep();return;
-  case'endless':run.endless=true;toPrep();return;
+  case'endless':startEndless(run);toPrep();return;   // +1 socket past the cap
   case'trophy':pickTrophy(run,b.dataset.id);play('coin');toPrep();return;
   case'title':toTitle();return;
   case'speed':G.speed=+b.dataset.v;savePrefs();renderCtl();{const n=$('#adm-note');if(n)n.textContent=impactNote()}return;
@@ -312,8 +318,8 @@ document.addEventListener('click',e=>{
   case'adm-win':if(G.phase==='fight'&&G.S&&!G.S.done){run.admin=true;for(const q of G.S.balls)if(q.team===1)q.alive=false;G.S.done='win'}return;
   case'adm-impact':{const l=(IMPCFG.levels||[])[i],p=G.S&&G.S.player;if(l){audioOn();Impact.trigger({level:l,x:p?p.x:AW/2,y:p?p.y:AH/2},true);const n=$('#adm-note');if(n)n.textContent=impactNote()}return}
  }
- audioOn();if(!(ok&&act==='sell'))play(ok?'coin':'deny');
- if(ok&&G.phase==='prep'&&(act==='buy'||act==='tune'||act==='sell'))refreshPreview();
+ audioOn();if(!QUIET_ACTS[act])play(ok?'coin':'deny');   // buying and selling make no sound
+ if(ok&&G.phase==='prep'&&(act==='buy'||act==='tune'||act==='sell'||act==='bag-aug'))refreshPreview();
  render();
  if(refocus){const el=$(refocus);if(el)el.focus({preventScroll:true})}
 });
@@ -445,24 +451,27 @@ function nextCard(run,mode){
  if(b)h+=`<h2>${b.name}</h2><p class="rule">${rich(b.rule)}</p>${bossNotes(b)}${enc.list.length?`<p class="with">${TX.bossBrings} ${encSummary(enc)}.</p>`:''}`;
  else h+=`<h2>${encSummary(enc)}</h2>${encNotes(enc)}`;
  h+=nextBosses(run);
- if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:CONS.bagSize})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc((TX.consumableTag||'Consumable')+': '+d.desc+(itemTip(run,x.id)?' '+itemTip(run,x.id):'')+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
+ if(shop&&(run.bag||[]).length)h+=`<div class="bag"><b>${tpl(TX.bagTitle||'Items {n}/{max}',{n:run.bag.length,max:bagSize(run)})}</b> <span class="with">${TX.bagHint||'Switch on to use in the next fight.'}</span><div class="row">${run.bag.map((x,i)=>{
+  if(x.aug){const a=AUG[x.aug];if(!a)return'';const room=run.augs.length<run.slots;return `<button class="bagged ${RC(a.rar)}" data-act="item-use" data-i="${i}" ${room?'':'aria-disabled="true"'} data-tip="${esc(a.name+': '+a.desc+' '+tpl(TX.bagAugInBag||'Bagged: click to socket. Right-click: sell for ${gold}.',{gold:sellValue(run,x.aug)})+(room?'':' '+(TX.bagAugNoRoom||'No free socket')))}">${icon('augments',x.aug)}${a.name}</button>`}
+  if(x.id==='ticket'){const d=ITEM.ticket;return d?`<button class="ticket" data-act="item-use" data-i="${i}" ${run.shop&&run.shop.free?'disabled':''} data-tip="${esc(TX.ticketTip||d.desc)}">${icon('items','ticket')}${d.name}</button>`:''}
+  const d=ITEM[x.id];return d?`<button data-act="item-use" data-i="${i}" aria-pressed="${!!x.use}" data-tip="${esc((TX.consumableTag||'Consumable')+': '+d.desc+(itemTip(run,x.id)?' '+itemTip(run,x.id):'')+' '+tpl(TX.itemSellTip||'Right-click: sell for ${gold}',{gold:Math.floor(d.cost/2)}))}">${icon('items',x.id)}${d.name}</button>`:''}).join('')}</div></div>`;
  if(shop)h+=pk!=null?`<button class="go back" data-act="peek" data-i="${run.stage}" data-primary>${TX.jumpToCurrent||'Jump to current'}</button>`:`<button class="go" data-act="fight" data-primary>${TX.fightButton}</button>`;
  return h+'</section>';
 }
 /* The shop's Lock button: locked shops come back after the next fight; a kept shop can't be locked again. */
 function lockBtn(sh){const k=!!sh.kept,l=!!sh.locked;return `<button class="lock${l?' on':''}" data-act="lock" aria-pressed="${l}" ${k?'disabled':''} data-tip="${esc(k?(TX.lockKeptTip||''):(TX.lockTip||''))}">${k?(TX.lockKept||'Kept'):l?(TX.lockOn||'Locked'):(TX.lockOff||'Lock')}</button>`}
 function shopCard(run){
- const sh=run.shop,full=run.augs.length>=run.slots,E=RULES.economy;
- let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3>${run.augs.length?sellBin():''}<span class="shop-btns">${lockBtn(sh)}<button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></span></div><div class="offers">`;   // reroll in the top right corner
+ const sh=run.shop,full=run.augs.length>=run.slots,E=RULES.economy,bagOk=(run.bag||[]).length<bagSize(run)&&!(run.bag||[]).some(x=>x.aug);
+ let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b>${sh.free?`<em class="free">${TX.shopFree||'Free!'}</em>`:''}</h3>${run.augs.length?sellBin():''}${bagBin()}<span class="shop-btns">${lockBtn(sh)}<button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></span></div><div class="offers">`;   // reroll in the top right corner
  sh.offers.forEach((o,i)=>{const d=AUG[o.id];if(!d)return;const c=augCost(run,o.id);
-  h+=augCard({id:o.id,kind:'offer',i,tag:'div',cls:o.sold?' sold':'',
-   foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});
+  h+=augCard({id:o.id,kind:'offer',i,tag:'div',cls:o.sold?' sold':'',attrs:o.sold?'':` data-offer="${i}"`,
+   foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});   // drag the card onto the bag in the header to buy it into the item bag
  h+='</div><div class="tunes">';
  sh.tunes.forEach((tu,i)=>{const d=TUNE[tu.k],c=tuneCost(run,tu.k);
   h+=`<div class="tune${tu.sold?' sold':''}${d.cap?' cap':''}" data-tilt="flat"${tuneStyle(tu.k)}><i class="tu-fx" aria-hidden="true"></i>${icon('tuneUps',tu.k)}<div><b>${d.name}</b><span>${tuneText(tu.k)}${TX.tuneUpSuffix}</span></div><button class="buy" data-act="tune" data-i="${i}" ${tu.sold||run.gold<c?'disabled':''}>${tu.sold?TX.sold:'$'+c}</button></div>`});
  h+='</div>';
- if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=CONS.bagSize;h+=`<div class="tunes items">`;
-  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}" data-tilt="flat"><i class="tu-fx" aria-hidden="true"></i>${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span${itemTip(run,o.id)?` data-tip="${esc(itemTip(run,o.id))}"`:''}>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<d.cost?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+d.cost}</button></div>`});h+='</div>'}
+ if(sh.items&&sh.items.length){const full=(run.bag||[]).length>=bagSize(run);h+=`<div class="tunes items">`;
+  sh.items.forEach((o,i)=>{const d=ITEM[o.id];if(!d)return;h+=`<div class="tune${o.sold?' sold':''}" data-tilt="flat"><i class="tu-fx" aria-hidden="true"></i>${icon('items',o.id)}<div><b>${d.name}<em class="ctag" data-tip="${esc(TX.consumableTip||'')}">${TX.consumableTag||'Consumable'}</em></b><span${itemTip(run,o.id)?` data-tip="${esc(itemTip(run,o.id))}"`:''}>${rich(d.desc)}</span></div><button class="buy" data-act="item" data-i="${i}" ${o.sold||full||run.gold<itemCost(run,o.id)?'disabled':''}>${o.sold?TX.sold:full?(TX.bagFull||'Bag full'):'$'+itemCost(run,o.id)}</button></div>`});h+='</div>'}
  const int=Math.min(run.intCap,Math.floor(run.gold/E.interestPerGold));
  h+=`<div class="shop-f"><span class="interest">${t('shopInterest',{per:E.interestPerGold,cap:run.intCap,now:int})}</span></div></section>`;
  return h;
@@ -532,7 +541,8 @@ function renderOverlay(){
   h=`<div class="sheet market"><div class="eyebrow">${TX.marketEyebrow||'Choose one. No rerolls.'}</div><h2>${TX.nightMarket||'Night Market'}</h2><div class="offers">${run.market.map(id=>augCard({id,kind:'offer',tag:'div',
    foot:`<button class="buy" data-act="void-pick" data-id="${id}"><small>${TX.take||'Take'}</small></button>`})).join('')}</div></div>`;
  }else if(G.phase==='trophy'){
-  h=`<div class="sheet"><div class="eyebrow">${t('trophyEyebrow',{hp:RULES.player.hpPerBossBeaten})}</div><h2>${TX.trophyTitle}</h2><div class="trophy-pick">${run.pending.map(id=>`<button data-act="trophy" data-id="${id}">${icon('trophies',id)}<b>${TROPHY[id].name}</b><span>${rich(TROPHY[id].desc)}</span></button>`).join('')}</div></div>`;
+  const LG=!!run.pendingL;   // after an endless boss: legendary trophies
+  h=`<div class="sheet${LG?' legendary':''}"><div class="eyebrow">${t('trophyEyebrow',{hp:RULES.player.hpPerBossBeaten})}</div><h2>${LG?(TX.legendaryTitle||'Choose a legendary trophy'):TX.trophyTitle}</h2><div class="trophy-pick">${run.pending.map(id=>`<button data-act="trophy" data-id="${id}"${TROPHY[id].legendary?' class="legendary"':''}>${icon('trophies',id)}<b>${TROPHY[id].name}</b><span>${rich(TROPHY[id].desc)}</span></button>`).join('')}</div></div>`;
  }else if(G.phase==='over'){
   const b=run.enc.boss&&BOSS[run.enc.boss];
   h=`<div class="sheet"><div class="eyebrow">${TX.overEyebrow}</div><h2>${b?t('overTitleBoss',{tier:run.tier,boss:b.name}):t('overTitle',{tier:run.tier})}</h2>${runStats(run,G.S)}${breakdown(G.S,run)}<div class="row"><button class="go" data-act="title" data-primary>${TX.newRun}</button></div></div>`;
@@ -667,6 +677,13 @@ function fixTips(){
 window.addEventListener('resize',fixTips);
 /* The needle that owned augments are dragged onto to sell them. Art slots: assets.images.sellBin.idle and .armed; the drawn needle is the fallback. */
 const NEEDLE='<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M35.2 10.2 37.8 12.8 8 41.6 6 42 6.4 40z" fill="currentColor"/><ellipse cx="39.2" cy="8.8" rx="5" ry="3" transform="rotate(-45 39.2 8.8)" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M43.5 5.5c2.5 6-1 11.500-6.500 13.500" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".55"/></svg>';
+/* the bag's pixel art: a tied burlap sack, 15x16 art pixels shown 3x (o outline, h light, b burlap, s shade, r/R rope) */
+const SACK=['.....o.o.o.....','....ohohoso....','....ohhbbso....','.....orRro.....','....orRrrro....','....ohbbbso....','...ohbbbbbso...','..ohbbbbbbbso..','.ohhbbbbbbbbso.','ohhbbbbsbbbbbso','ohbbbbbbbbbbbso','ohbbbbbbbsbbsso','obbbbbbbbbbbsso','.osbbbbbbbbsso.','..ossssssssso..','...ooooooooo...'];
+let sackURL=null;
+function sackArt(){if(sackURL)return sackURL;const S=3,cv=document.createElement('canvas');cv.width=15*S;cv.height=16*S;const g=cv.getContext('2d'),pal={o:'#2a1812',h:'#deb880',b:'#be9156',s:'#8c6234',r:'#603e1e',R:'#966c3c'};
+ SACK.forEach((r,y)=>[...r].forEach((c,x)=>{if(pal[c]){g.fillStyle=pal[c];g.fillRect(x*S,y*S,S,S)}}));return sackURL=cv.toDataURL()}
+/* The bag next to the needle: drag a shop augment onto it to buy it into the item bag, or an owned one to put it away (one bagged augment at a time). */
+function bagBin(){return `<div class="bagbin" id="bagbin" data-tip="${esc(TX.bagBinTip||'Bag an augment for later')}"><img class="bagpix" src="${sackArt()}" alt=""></div>`}
 function sellBin(){
  const B=AS.images.sellBin||{},img=(src,cls)=>src?`<img class="icon ${cls}" src="${esc(src)}" alt="">`:'';
  return `<div class="sellbin" id="sellbin" data-tip="${esc(TX.sellBinTip||'Drag an augment here to sell')}">${img(B.armed,'bin-armed')}${img(B.idle,'bin-idle')}${NEEDLE}</div>`;
@@ -744,38 +761,51 @@ function endPress(){if(press){clearTimeout(press.t);press=null}}
 document.addEventListener('pointerdown',e=>{
  if(G.sellArm&&!(e.target.closest&&e.target.closest('#sellq')))disarmSell();
  if(G.phase!=='prep'||e.button>0)return;
+ const offer=e.target.closest('#shopview .acard[data-offer]');
+ if(offer&&!e.target.closest('button')&&(e.pointerType==='mouse'||e.target.closest('.ac-art'))){drag={offer:+offer.dataset.offer,row:offer,x0:e.clientX,y0:e.clientY,on:false,id:e.pointerId,to:null,sell:false,bag:false};return}
  const row=e.target.closest('li.aug[data-drag]');if(!row||e.target.closest('button'))return;
  if(e.pointerType!=='mouse'&&!e.target.closest('.grip')){   // touch away from the grip: a long press asks to sell
   endPress();const i=+row.dataset.drag;press={id:e.pointerId,x:e.clientX,y:e.clientY,t:setTimeout(()=>{press=null;armSell(i)},HOLD_SELL)};return}
- drag={i:+row.dataset.drag,row,x0:e.clientX,y0:e.clientY,on:false,id:e.pointerId,to:null,sell:false};
+ drag={i:+row.dataset.drag,row,x0:e.clientX,y0:e.clientY,on:false,id:e.pointerId,to:null,sell:false,bag:false};
 });
 document.addEventListener('pointermove',e=>{
  if(press&&e.pointerId===press.id&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>10)endPress();
  if(!drag||e.pointerId!==drag.id)return;
  const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
  if(!drag.on){if(Math.hypot(dx,dy)<6)return;drag.on=true;drag.ghost=dragGhost(drag.row,drag.x0,drag.y0);drag.card=drag.ghost.firstChild;drag.card.classList.add('dragging');drag.row.classList.add('drag-src');
-  document.body.classList.add('drag-active');hideTip();if(shopview.hidden&&G.phase==='prep'){shopview.hidden=false;drag.opened=true}}
+  document.body.classList.add('drag-active');try{getSelection().removeAllRanges()}catch(_){}if(drag.offer!=null)document.body.classList.add('drag-offer');hideTip();if(shopview.hidden&&G.phase==='prep'){shopview.hidden=false;drag.opened=true}
+  const bb=$('#bagbin');drag.bagOk=canBag(G.run)&&(drag.offer==null||G.run.gold>=augCost(G.run,G.run.shop.offers[drag.offer].id));if(bb)bb.classList.toggle('ok',drag.bagOk)}
  e.preventDefault();
+ const near=(el,m)=>{if(!el)return false;const b=el.getBoundingClientRect();return e.clientX>=b.left-m&&e.clientX<=b.right+m&&e.clientY>=b.top-m&&e.clientY<=b.bottom+m};
+ // over the bag (yellow): bag it, if there is room
+ const bagEl=$('#bagbin'),onBag=!!drag.bagOk&&near(bagEl,14);
+ if(onBag!==drag.bag){drag.bag=onBag;bagEl.classList.toggle('armed',onBag);drag.card.classList.toggle('bagging',onBag);
+  if(onBag){if(!drag.btag){drag.btag=document.createElement('b');drag.btag.className='sell-tag bag-tag';document.body.appendChild(drag.btag)}
+   const r=bagEl.getBoundingClientRect();drag.btag.textContent=drag.offer!=null?'-$'+augCost(G.run,G.run.shop.offers[drag.offer].id):(TX.bagAug||'Bag');drag.btag.style.left=(r.left+r.width/2)+'px';drag.btag.style.top=(r.bottom+8)+'px';drag.btag.hidden=false}
+  else if(drag.btag)drag.btag.hidden=true}
+ if(drag.offer!=null){drag.card.style.transform='translate('+dx+'px,'+dy+'px)'+(onBag?' rotate(6deg) scale(.5)':'');return}   // a shop card only goes into the bag
  // over the needle (with a little slack): armed to sell
- const bin=$('#sellbin');let over=false;
- if(bin){const b=bin.getBoundingClientRect(),m=16;over=e.clientX>=b.left-m&&e.clientX<=b.right+m&&e.clientY>=b.top-m&&e.clientY<=b.bottom+m}
+ const bin=$('#sellbin');let over=!onBag&&near(bin,16);
  if(over!==drag.sell){drag.sell=over;bin.classList.toggle('armed',over);drag.card.classList.toggle('selling',over);
   const a=G.run.augs[drag.i];   // the sale price, under the needle and above the dragged card (a page-level label, like the card copy)
   if(over&&a){if(!drag.tag){drag.tag=document.createElement('b');drag.tag.className='sell-tag';document.body.appendChild(drag.tag)}
    const r=bin.getBoundingClientRect();drag.tag.textContent='+$'+sellValue(G.run,a.id);drag.tag.style.left=(r.left+r.width/2)+'px';drag.tag.style.top=(r.bottom+8)+'px';drag.tag.hidden=false}
   else if(drag.tag)drag.tag.hidden=true}
- drag.card.style.transform='translate('+dx+'px,'+dy+'px)'+(over?' rotate(-6deg) scale(.5)':'');
+ drag.card.style.transform='translate('+dx+'px,'+dy+'px)'+(over?' rotate(-6deg) scale(.5)':onBag?' rotate(6deg) scale(.5)':'');
  // otherwise the new socket is the number of other rows whose middle is above the pointer
  const others=dragRows().filter(r=>r!==drag.row);let to=0;
  for(const r of others){const b=r.getBoundingClientRect();if(e.clientY>b.top+b.height/2)to++}
- drag.to=over?null:to;
+ drag.to=over||onBag?null:to;
  for(const r of others)r.classList.remove('drop-above','drop-below');
- if(!over&&to!==drag.i&&others.length){if(to<others.length)others[to].classList.add('drop-above');else others[others.length-1].classList.add('drop-below')}
+ if(!over&&!onBag&&to!==drag.i&&others.length){if(to<others.length)others[to].classList.add('drop-above');else others[others.length-1].classList.add('drop-below')}
 },{passive:false});
 function endDrag(e,cancel){
  endPress();
  if(!drag||(e&&e.pointerId!==drag.id))return;
- const d=drag,bin=$('#sellbin');drag=null;document.body.classList.remove('drag-active');if(d.ghost)d.ghost.parentNode.removeChild(d.ghost);if(d.tag)d.tag.parentNode.removeChild(d.tag);
+ const d=drag,bin=$('#sellbin'),bagEl=$('#bagbin');drag=null;document.body.classList.remove('drag-active','drag-offer');if(d.ghost)d.ghost.parentNode.removeChild(d.ghost);if(d.tag)d.tag.parentNode.removeChild(d.tag);if(d.btag)d.btag.parentNode.removeChild(d.btag);
+ if(bagEl)bagEl.classList.remove('ok','armed');
+ if(d.on&&!cancel&&d.bag&&(d.offer!=null?bagAug(G.run,d.offer):bagOwned(G.run,d.i))){refreshPreview();render();return}   // into the bag
+ if(d.offer!=null){if(d.opened)shopview.hidden=G.view==='arena';d.row.classList.remove('drag-src');return}
  if(d.on&&!cancel&&d.sell){const r=(bin||d.row).getBoundingClientRect();
   if(sellAug(G.run,d.i)){sellFx(r.left+r.width/2,r.top+r.height/2);refreshPreview();render();return}}
  if(d.on&&!cancel&&d.to!=null&&moveAugTo(G.run,d.i,d.to)){audioOn();play('coin');render();return}
@@ -804,8 +834,9 @@ document.addEventListener('contextmenu',e=>{
  e.preventDefault();endPress();armSell(+row.dataset.drag);
 });
 /* The pop when an augment is sold: sound (assets.sounds.sell, else the pop) and a small burst at x,y on the page. */
+const QUIET_ACTS={buy:1,'bag-aug':1,tune:1,item:1,'item-sell':1,sell:1,'void-pick':1};   // shop actions that play no sound
 function sellFx(x,y){
- audioOn();play('sell');
+ // no sound: buying and selling are silent
  if(reduce||!document.body.animate)return;
  for(let i=0;i<12;i++){const s=document.createElement('i'),a=Math.random()*TAU,d=24+Math.random()*36;
   s.className='popbit';s.style.left=x+'px';s.style.top=y+'px';s.style.background=i%3?TH.page.gold:TH.page.chalk;document.body.appendChild(s);

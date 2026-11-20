@@ -230,3 +230,10 @@ html.pxui .ord{border:0;border-radius:0;background:var(--px-ord) 0 0/100% 100% n
 html.pxui .aug.empty{border-radius:0;border-style:solid;border-width:9px;border-image:var(--pf-empty) 9/9px round;image-rendering:pixelated}
 html.pxui .aug.empty .ord{width:78px;height:78px;border:0;border-radius:0;background:var(--px-empty) 0 0/100% 100% no-repeat}
 @media (max-width:480px){html.pxui .aug.empty .ord{width:65px;height:65px}}
+/* dragging an augment over the bag in the Shop header: its frame glows gold (like the pink glow over the needle) */
+.framed.bagging .ac-frame{filter:drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)) drop-shadow(0 0 9px var(--gold))}
+.acard.bagging:not(.framed){box-shadow:0 0 0 3px var(--gold),0 0 12px var(--gold)}
+.drag-ghost .acard.bagging{opacity:.55}
+#shopview .acard[data-offer]{cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}   /* dragging a shop card must not select text */
+body.drag-active{user-select:none;-webkit-user-select:none}
+#shopview .acard[data-offer] .ac-art{touch-action:none}   /* on touch, drag a shop card by its art circle */
