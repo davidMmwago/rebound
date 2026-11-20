@@ -195,19 +195,30 @@ main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-height:0}
 
 
 /* selling: the needle that augments are dragged onto (shop only), and the pop when one is sold */
-.sellbin+h3{padding-right:58px;min-height:48px;align-content:center}
-.sellbin{position:sticky;top:6px;z-index:6;align-self:flex-end;flex:none;width:48px;height:48px;margin-bottom:-57px;border-radius:50%;display:grid;place-items:center;
-  background:var(--ink);border:2px dashed var(--line);color:var(--dim);cursor:help;transition:transform .15s ease,border-color .15s ease,color .15s ease}
-.sellbin svg{width:34px;height:34px;display:block}
-.sellbin .icon{width:42px;height:42px;grid-area:1/1}
+.sellbin{position:relative;flex:none;width:60px;height:60px;margin-left:auto;display:grid;place-items:center;
+  background:var(--ink);border:2px dashed var(--line);border-radius:50%;color:var(--dim);cursor:help;transition:transform .15s ease}
+.sellbin svg{width:36px;height:36px;display:block;grid-area:1/1}
+.sellbin .icon{width:54px;height:54px;grid-area:1/1;image-rendering:pixelated}
 .sellbin .bin-armed{display:none}
 .sellbin.armed .bin-armed{display:block}
 .sellbin.armed .bin-armed~.bin-idle{display:none}
 .sellbin .bin-idle~svg,.sellbin.armed .bin-armed~svg{display:none}
-.sellbin b{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;padding:0 7px;border-radius:99px;background:var(--ink);border:2px solid var(--drop);color:var(--gold);font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);white-space:nowrap;display:none}
+.sellbin b{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;padding:0 7px;background:var(--ink);border:2px solid var(--drop);color:var(--gold);font-family:var(--body);font-weight:400;font-size:var(--bfs,13.333px);white-space:nowrap;display:none;z-index:3}
 body.drag-active .sellbin{border-color:var(--mult);color:var(--mult);transform:scale(1.12)}
-body.drag-active .sellbin.armed{border-style:solid;background:var(--mult);color:var(--ink);transform:scale(1.32) rotate(-16deg);box-shadow:0 0 16px var(--mult)}
-.sellbin.armed b{display:block;transform:translateX(-50%) rotate(16deg)}
+body.drag-active .sellbin.armed{border-style:solid;background:var(--mult);color:var(--ink);transform:scale(1.3) rotate(-12deg)}
+.sellbin.armed b{display:block;transform:translateX(-50%) rotate(12deg)}
+/* pixel look: a round sunken socket drawn by pixelButtons() (--pb-socket, pink --pb-socket-on while armed) */
+html.pxui .sellbin{border:0;border-radius:0;background:var(--pb-socket) center/100% 100% no-repeat;image-rendering:pixelated}
+html.pxui body.drag-active .sellbin{background-color:transparent;background-image:var(--pb-socket-hot)}
+html.pxui body.drag-active .sellbin.armed{background-color:transparent;background-image:var(--pb-socket-on)}   /* no square pink fill behind the round socket */
+/* the sale price while an augment is held over the needle: on top of the page so the dragged card never covers it */
+.sell-tag{position:fixed;z-index:1001;transform:translateX(-50%) rotate(-4deg);pointer-events:none;padding:0 7px;background:var(--ink);border:2px solid var(--drop);border-radius:99px;
+  color:var(--gold);font-family:var(--display);font-weight:400;font-size:calc(var(--dpx,32.68px)*.75);line-height:1.1;white-space:nowrap}
+html.pxui .sell-tag{border-radius:0;border-style:solid;border-width:6px 6px 12px;border-image:var(--pf-tip) 6 6 12 fill/6px 6px 12px stretch;background:none;image-rendering:pixelated;padding:0 4px}
+/* the dragged copy of an augment card, on top of everything; the card left in its socket is dimmed */
+.drag-ghost{position:fixed;z-index:1000;margin:0;padding:0;pointer-events:none;list-style:none}
+.drag-ghost>.aug{margin:0}
+.aug.drag-src{opacity:.3}
 .popbit{position:fixed;z-index:70;width:7px;height:7px;border-radius:50%;pointer-events:none}
 
 /* ----- pixel fonts (assets.fonts, sized by theme.fonts) -----
@@ -400,3 +411,52 @@ html.pxui .tune .buy:active:not(:disabled){transform:none;box-shadow:none;border
 .shop-btns{display:flex;gap:8px;align-items:center}
 .shop .lock{font-family:var(--display);font-weight:400;font-size:var(--dpx,32.68px);line-height:1;padding:6px 14px;border-radius:12px;white-space:nowrap}
 .shop .lock.on{background:var(--gold);color:var(--ink)}
+html.pxui .sellbin{height:66px;padding-bottom:6px}
+/* the Last hit box flashes on every hit (ui.js liveStats adds .hot, or .hotc on a crit) */
+.readout .dm.hot{background:var(--gold)} .readout .dm.hotc{background:#fff3b0;animation:bump .22s ease-out}
+html.pxui .readout .dm.hot{background:none;border-image-source:var(--pf-dmhot)} html.pxui .readout .dm.hotc{background:none;border-image-source:var(--pf-dmcrit)}
+
+/* ---------- pixel-art buttons, chips, tracker, tags, arena rim and hint bubble (theme.pixelPanels; art from pixelFrames()/pixelButtons() in ui.js) ----------
+   Buttons use a pad-0 frame: 6 px slices, 12 px at the bottom for the drop shadow. Pressed, the -down copy has no shadow and sits 6 px lower (12 px on top).
+   --pfb and --pfb-down pick the colour: n (panel), on (pressed toggle: chalk), go (accent), gold (Lock on), sell (Sell for $X). */
+html.pxui button{--pfb:var(--pf-b-n);--pfb-down:var(--pf-b-n-down)}   /* low specificity, so .go and the others can change it */
+html.pxui button:not(.buy,.weapon,.step,[data-act="trophy"]){
+  border-style:solid;border-width:6px 6px 12px;border-radius:0;box-shadow:none;background:none;image-rendering:pixelated;transition:none;
+  border-image-source:var(--pfb);border-image-slice:6 6 12 fill;border-image-width:6px 6px 12px;border-image-repeat:stretch;padding:2px 6px}
+html.pxui button:not(.buy,.weapon,.step,[data-act="trophy"]):active:not(:disabled){transform:none;box-shadow:none;border-image-source:var(--pfb-down);border-image-slice:12 6 6 fill;border-image-width:12px 6px 6px;border-width:12px 6px 6px}
+html.pxui button[aria-pressed="true"]:not(.step,[data-act="trophy"]){--pfb:var(--pf-b-on);--pfb-down:var(--pf-b-on-down);background:none;color:var(--ink)}
+html.pxui .go{--pfb:var(--pf-b-go);--pfb-down:var(--pf-b-go-down);padding:4px 12px}
+html.pxui .go.back{--pfb:var(--pf-b-n);--pfb-down:var(--pf-b-n-down)}
+html.pxui .shop .lock.on{--pfb:var(--pf-b-gold);--pfb-down:var(--pf-b-gold-down);background:none}
+html.pxui .shop .lock,html.pxui .shop .reroll{padding:4px 10px}
+html.pxui .sellq{--pfb:var(--pf-b-sell);--pfb-down:var(--pf-b-sell-down);background:none;padding:2px 8px}
+html.pxui .sellq:active:not(:disabled){transform:translateY(-50%)}
+html.pxui .seg button,html.pxui .viewtabs button{margin-left:0}
+html.pxui .seg,html.pxui .viewtabs{gap:3px}
+html.pxui .fold-btn{padding:0 6px}
+html.pxui .aug-a button{width:30px;height:32px;padding:0;line-height:12px}
+html.pxui .aug-a button:active:not(:disabled){height:32px}
+/* header chips */
+html.pxui .chips span{border-style:solid;border-width:6px;border-radius:0;background:none;border-image:var(--pf-chip) 6 fill/6px stretch;image-rendering:pixelated;padding:0 6px;min-height:38px}
+html.pxui .chips .gold{border-image-source:var(--pf-chip-gold);line-height:.8;padding:0 6px}
+/* the green Consumable tag */
+html.pxui .ctag{border-style:solid;border-width:6px;border-radius:0;background:none;border-image:var(--pf-ctag) 6 fill/6px stretch;image-rendering:pixelated;padding:0 1px;line-height:12px;vertical-align:-2px}
+/* arena rim: a dark outline and a white bevel with a hard shadow; the floor shows through */
+html.pxui .arena{border-style:solid;border-width:9px 9px 15px;border-radius:0;box-shadow:none;border-image:var(--pf-arena) 9 9 15/9px 9px 15px stretch;image-rendering:pixelated}
+/* hint bubble */
+html.pxui #tip{border-style:solid;border-width:6px 6px 12px;border-radius:0;box-shadow:none;background:none;border-image:var(--pf-tip) 6 6 12 fill/6px 6px 12px stretch;image-rendering:pixelated;padding:2px 6px}
+/* logo coin */
+html.pxui .logo i{width:24px;height:30px;border:0;border-radius:0;box-shadow:none;background:var(--pb-logo) 0 0/100% 100% no-repeat;image-rendering:pixelated;margin-top:6px}
+/* fight tracker: pixel circles, the boss a pixel diamond (no rotation) */
+html.pxui .step i{border:0;border-radius:0;background:var(--px-step) 0 0/100% 100% no-repeat;image-rendering:pixelated}
+html.pxui .step.done i{background-image:var(--px-step-done)} html.pxui .step.now i{background-image:var(--px-step-now)}
+html.pxui .step.boss i{width:30px;height:30px;margin:0;transform:none;background-image:var(--px-boss)}
+html.pxui .step.boss.done i{background-image:var(--px-boss-done)} html.pxui .step.boss.now i{background-image:var(--px-boss-now)}
+html.pxui button.step.boss:hover i{transform:scale(1.12)}
+html.pxui .next.compact .step.boss i{width:20px;height:20px}
+html.pxui .step.sel i{box-shadow:0 0 0 3px var(--panel),0 0 0 6px var(--gold)}
+html.pxui .step-line{border-radius:0;height:3px}
+html.pxui button.step:hover:not(:disabled){background:none}
+html.pxui .pips i{border-radius:0} html.pxui .pips i.boss{border-radius:0}
+/* over the needle, the dragged card shrinks and fades so the needle shows through */
+.drag-ghost .aug.selling{opacity:.55}

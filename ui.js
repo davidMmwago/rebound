@@ -55,10 +55,10 @@ function pixFrame(o){
  const cv_=document.createElement('canvas');cv_.width=w*S;cv_.height=h*S;const g=cv_.getContext('2d');
  const body=(x,y)=>{if(x<0||y<0||x>=w||y>=bh)return false;const cx=Math.min(x,w-1-x),cy=Math.min(y,bh-1-y);return cx+cy>=2};   // stepped corners: the 3 corner pixels are cut
  const line=(x,y)=>body(x,y)&&(!body(x-1,y)||!body(x+1,y)||!body(x,y-1)||!body(x,y+1));
- const px=(x,y,col)=>{g.fillStyle=col;g.fillRect(x*S,y*S,S,S)};
- if(sh)for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(body(x,y-sh)&&!body(x,y))px(x,y,o.drop||o.line);
+ const oy=o.down?sh:0,px=(x,y,col)=>{if(col){g.fillStyle=col;g.fillRect(x*S,(y+oy)*S,S,S)}};   // o.down: the pressed copy, no shadow, sunk by its height
+ if(sh&&!o.down)for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(body(x,y-sh)&&!body(x,y))px(x,y,o.drop||o.line);
  for(let y=0;y<bh;y++)for(let x=0;x<w;x++){if(!body(x,y))continue;
-  if(line(x,y)){px(x,y,o.line);continue}
+  if(line(x,y)){px(x,y,o.dash&&((x+y)%2)?null:o.line);continue}   // o.dash: every other outline pixel (tiled with border-image-repeat:round)
   const tl=line(x-1,y)||line(x,y-1),br=line(x+1,y)||line(x,y+1);
   px(x,y,tl?(o.inset?o.lo:o.hi):br?(o.inset?o.hi:o.lo):o.fill)}
  return'url('+cv_.toDataURL()+')';
@@ -68,7 +68,7 @@ const PXF={};   // which per-tune-up frames exist
    each with a pressed copy (no drop shadow, sunk by it). 3 screen pixels per art pixel. Set as --pb-coin, --pb-coin-down, --pb-pill, --pb-pill-down;
    the CSS is in the "pixel buy buttons" sections of cards.css (coin) and style.css (pill). Colour: theme.page.gold. */
 function pixShape(w,bh,inside,o){
- const S=3,sh=2,h=bh+sh,out={};
+ const S=3,sh=o.flat?0:2,h=bh+sh,out={};   // o.flat: no drop shadow
  for(const down of[0,1]){
   const cv_=document.createElement('canvas');cv_.width=w*S;cv_.height=h*S;const g=cv_.getContext('2d'),oy=down?sh:0;
   const body=(x,y)=>x>=0&&y>=0&&x<w&&y<bh&&inside(x,y);
@@ -80,6 +80,7 @@ function pixShape(w,bh,inside,o){
    const tl=line(x-1,y)||line(x,y-1),br=line(x+1,y)||line(x,y+1),tl2=line(x-2,y)||line(x,y-2)||line(x-1,y-1);
    px(x,y,tl?o.hi:br?o.lo:(tl2&&o.hi2)?o.hi2:o.fill)}
   if(o.glint)for(const[x,y]of o.glint)if(body(x,y)&&!line(x,y))px(x,y,o.shine);
+  if(o.flat){out.up=out.down='url('+cv_.toDataURL()+')';break}
   out[down?'down':'up']='url('+cv_.toDataURL()+')'}
  return out;
 }
@@ -90,6 +91,19 @@ function pixelButtons(){
  st.setProperty('--pb-coin',coin.up);st.setProperty('--pb-coin-down',coin.down);
  const W=11,H=10,r=5,pill=pixShape(W,H,(x,y)=>{const cx=Math.min(Math.max(x+.5,r),W-r),cy=Math.min(Math.max(y+.5,r),H-r);return(x+.5-cx)**2+(y+.5-cy)**2<=r*r-.2},o);
  st.setProperty('--pb-pill',pill.up);st.setProperty('--pb-pill-down',pill.down);
+ const ring=(D,col,fill,o)=>pixShape(D,D,(x,y)=>(x+.5-D/2)**2+(y+.5-D/2)**2<=(D/2-.05)**2,Object.assign({fill,line:col,hi:mixHex(fill,'#ffffff',.25),lo:mixHex(fill,'#000000',.3),flat:true},o||{})).up;
+ const dia=(D,col,fill)=>pixShape(D,D,(x,y)=>Math.abs(x+.5-D/2)+Math.abs(y+.5-D/2)<=D/2,{fill,line:col,hi:mixHex(fill,'#ffffff',.25),lo:mixHex(fill,'#000000',.3),flat:true}).up;
+ const D8=8,logo=pixShape(D8,D8,(x,y)=>(x+.5-D8/2)**2+(y+.5-D8/2)**2<=(D8/2-.05)**2,Object.assign({},o,{glint:[[2,2]]}));st.setProperty('--pb-logo',logo.up);   // the logo's coin
+ st.setProperty('--px-step',ring(10,P.dim,P.ink,{hi:mixHex(P.ink,'#ffffff',.1),lo:'#000000'}));st.setProperty('--px-step-done',ring(10,P.drop,P.dim));
+ st.setProperty('--px-step-now',ring(10,P.drop,P.accent));
+ st.setProperty('--px-boss',dia(10,P.mult,P.ink));st.setProperty('--px-boss-done',dia(10,P.drop,P.dim));st.setProperty('--px-boss-now',dia(10,P.drop,P.mult));
+ st.setProperty('--px-ord',ring(7,P.drop,P.ink,{hi:mixHex(P.ink,'#ffffff',.12),lo:'#000000'}));
+ { const D=26,c=mixHex(P.panel,P.dim,.45),cv_=pixShape(D,D,(x,y)=>{const d=Math.hypot(x+.5-D/2,y+.5-D/2);return d<=D/2-.05&&d>D/2-1.2&&Math.floor((Math.atan2(y+.5-D/2,x+.5-D/2)+Math.PI)/(2*Math.PI)*20)%2===0},{fill:c,line:c,hi:c,lo:c,flat:true});st.setProperty('--px-empty',cv_.up)}   // dashed ring for an empty socket's number
+ // the sell needle's round socket in the Shop header: sunken and dark; ringed pink while an augment is dragged; filled pink while one is over it
+ const SD=20,SR=SD/2-.05,disc=(x,y)=>(x+.5-SD/2)**2+(y+.5-SD/2)**2<=SR*SR,ink=P.ink,M=P.mult;
+ st.setProperty('--pb-socket',pixShape(SD,SD,disc,{fill:mixHex(ink,'#ffffff',.03),line:P.drop,hi:'#000000',lo:mixHex(ink,'#ffffff',.14)}).up);
+ st.setProperty('--pb-socket-hot',pixShape(SD,SD,disc,{fill:mixHex(ink,M,.12),line:M,hi:'#000000',lo:mixHex(ink,M,.35)}).up);
+ st.setProperty('--pb-socket-on',pixShape(SD,SD,disc,{fill:M,line:P.drop,hi:mixHex(M,'#ffffff',.4),lo:mixHex(M,'#000000',.3)}).up);
 }
 function pixelFrames(){
  const P=TH.page,st=document.documentElement.style,lt=c=>mixHex(c,'#ffffff',.1),dk=c=>mixHex(c,'#000000',.3);
@@ -101,8 +115,17 @@ function pixelFrames(){
  set('box',{fill:P.panel2,pad:1});
  set('item',{fill:'#1e3833',pad:1});
  set('btn',{fill:P.panel2,pad:1,shadow:true});
- set('pw',{fill:P.pow,pad:1,shadow:true});set('ml',{fill:P.mult,pad:1,shadow:true});set('dm',{fill:P.chalk,pad:1,shadow:true});
+ set('pw',{fill:P.pow,pad:1,shadow:true});set('ml',{fill:P.mult,pad:1,shadow:true});set('dm',{fill:P.chalk,pad:1,shadow:true});set('dmhot',{fill:P.gold,pad:1,shadow:true});set('dmcrit',{fill:mixHex(P.gold,'#ffffff',.45),line:P.accent,pad:1,shadow:true});
  set('bar',{fill:P.ink,pad:0,inset:true,lo:'#000000',hi:mixHex(P.ink,'#ffffff',.06)});
+ /* buttons (pad 0: slices 6, and 12 at the bottom for the shadow; the pressed copy -down is 12 at the top), chips, the arena rim, the hint bubble and
+    the dashed empty socket. Each button colour: --pf-b-<k> and --pf-b-<k>-down; the CSS picks one through --pfb / --pfb-down. */
+ const btn=(k,fill,o)=>{const b=Object.assign({fill,pad:0,shadow:true},o||{});set('b-'+k,b);set('b-'+k+'-down',Object.assign({},b,{down:true}))};
+ btn('n',P.panel2);btn('on',P.chalk);btn('go',P.accent);btn('gold',P.gold);btn('sell',P.mult);
+ set('chip',{fill:P.panel,pad:0});set('chip-gold',{fill:P.panel,line:P.gold,hi:mixHex(P.panel,P.gold,.25),pad:0});
+ set('ctag',{fill:'#7ee0b0',pad:0});
+ set('arena',{fill:P.chalk,pad:1,shadow:true,hi:'#ffffff',lo:mixHex(P.chalk,'#000000',.32)});
+ set('tip',{fill:P.ink,line:P.chalk,drop:P.drop,pad:0,shadow:true,hi:mixHex(P.ink,'#ffffff',.1),lo:'#000000'});
+ set('empty',{fill:'transparent',line:mixHex(P.panel,P.dim,.45),hi:'transparent',lo:'transparent',pad:1,dash:true});
  for(const k of Object.keys(DATA.tuneUps)){const c=k[0]!=='_'&&DATA.tuneUps[k]&&DATA.tuneUps[k].color;if(c){set('tu-'+k,{fill:mixHex(P.panel2,c,TH.tuneHue==null?.14:TH.tuneHue),pad:1});PXF['tu-'+k]=1}}   // a faint hue per stat (theme.tuneHue, default 0.14)
  pixelButtons();
 }
@@ -151,7 +174,7 @@ const SFX={
  win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.18,'triangle',.06,0,i*.09)),lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,.22,'sawtooth',.05,0,i*.12)),
  bossdie:()=>{tone(90,.5,'sawtooth',.09,30);tone(660,.3,'triangle',.05,1320,.1)},coin:()=>tone(1320,.08,'square',.035,1760),deny:()=>tone(160,.1,'square',.04),
  impact:()=>{tone(65,.4,'sawtooth',.1,28);tone(1400,.07,'square',.05,180)},
- sell:()=>SFX.pop(),
+ sell:()=>{tone(1100,.04,'square',.05,2200);tone(420,.1,'sine',.09,90,.015)},   // fallback when assets.sounds.sell is not set: a click and a drop
  type:()=>tone(1500+Math.random()*400,.018,'square',.016),   // the post-fight recap typing out
 };
 function play(k){
@@ -328,7 +351,7 @@ function augRow(a,i,run,mode){
    +(asking?`<button class="sellq" id="sellq" data-act="sell" data-i="${i}">${tpl(TX.sellConfirm||'Sell for ${gold}?',{gold:price})}</button>`:''):''});
 }
 function augList(run,mode){
- let h=`<section class="card sockets">${mode==='prep'&&run.augs.length?sellBin():''}<h3>${TX.augmentsTitle} <span>${t('augmentsHint',{used:run.augs.length,slots:run.slots})}</span></h3><ol class="augs">`;
+ let h=`<section class="card sockets"><h3>${TX.augmentsTitle} <span>${t('augmentsHint',{used:run.augs.length,slots:run.slots})}</span></h3><ol class="augs">`;
  run.augs.forEach((a,i)=>h+=augRow(a,i,run,mode));
  for(let i=run.augs.length;i<run.slots;i++)h+=`<li class="aug empty"><span class="ord">${i+1}</span> ${TX.emptySocket}</li>`;
  h+='</ol>';
@@ -430,7 +453,7 @@ function nextCard(run,mode){
 function lockBtn(sh){const k=!!sh.kept,l=!!sh.locked;return `<button class="lock${l?' on':''}" data-act="lock" aria-pressed="${l}" ${k?'disabled':''} data-tip="${esc(k?(TX.lockKeptTip||''):(TX.lockTip||''))}">${k?(TX.lockKept||'Kept'):l?(TX.lockOn||'Locked'):(TX.lockOff||'Lock')}</button>`}
 function shopCard(run){
  const sh=run.shop,full=run.augs.length>=run.slots,E=RULES.economy;
- let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3><span class="shop-btns">${lockBtn(sh)}<button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></span></div><div class="offers">`;   // reroll in the top right corner
+ let h=`<section class="card shop"><div class="shop-h"><h3>${TX.shopTitle} <b class="money">$${run.gold}</b></h3>${run.augs.length?sellBin():''}<span class="shop-btns">${lockBtn(sh)}<button class="reroll" data-act="reroll" ${run.gold<sh.reroll?'disabled':''}>${TX.reroll} <b>$${sh.reroll}</b></button></span></div><div class="offers">`;   // reroll in the top right corner
  sh.offers.forEach((o,i)=>{const d=AUG[o.id];if(!d)return;const c=augCost(run,o.id);
   h+=augCard({id:o.id,kind:'offer',i,tag:'div',cls:o.sold?' sold':'',
    foot:`<button class="buy" data-act="buy" data-i="${i}" ${o.sold||full||run.gold<c?'disabled':''}>${o.sold?`<small>${TX.sold}</small>`:full?`<small>${TX.noSocket}</small>`:`<small>${TX.buy}</small><b>$${c}</b>`}</button>`})});
@@ -646,7 +669,7 @@ window.addEventListener('resize',fixTips);
 const NEEDLE='<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M35.2 10.2 37.8 12.8 8 41.6 6 42 6.4 40z" fill="currentColor"/><ellipse cx="39.2" cy="8.8" rx="5" ry="3" transform="rotate(-45 39.2 8.8)" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M43.5 5.5c2.5 6-1 11.500-6.500 13.500" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".55"/></svg>';
 function sellBin(){
  const B=AS.images.sellBin||{},img=(src,cls)=>src?`<img class="icon ${cls}" src="${esc(src)}" alt="">`:'';
- return `<div class="sellbin" id="sellbin" data-tip="${esc(TX.sellBinTip||'Drag an augment here to sell')}">${img(B.armed,'bin-armed')}${img(B.idle,'bin-idle')}${NEEDLE}<b id="sellbin-price"></b></div>`;
+ return `<div class="sellbin" id="sellbin" data-tip="${esc(TX.sellBinTip||'Drag an augment here to sell')}">${img(B.armed,'bin-armed')}${img(B.idle,'bin-idle')}${NEEDLE}</div>`;
 }
 
 /* Hint bubble: any element with data-tip shows that text on hover or tap. Used for keyword definitions and trophies. */
@@ -705,11 +728,17 @@ function holdTick(now){
 document.addEventListener('keyup',e=>{if(e.key==='r'||e.key==='R')G.holdR=0});
 window.addEventListener('blur',()=>{G.holdR=0});
 
-/* Dragging owned augments in the shop: to another socket to reorder, or onto the needle to sell. With a mouse, drag a card anywhere. On touch, drag the grip.
-   The arrow buttons stay for keyboards. */
+/* Dragging owned augments in the shop: to another socket to reorder, or onto the needle (in the Shop header) to sell. With a mouse, drag a card anywhere.
+   On touch, drag the grip. The arrow buttons stay for keyboards. What moves is a copy of the card on top of the page (dragGhost), so it is never hidden
+   under the shop window; the card itself stays dimmed in its socket. If the Warm-up tab is showing, the shop opens for the drag so the needle is there. */
 let drag=null,press=null;
 const HOLD_SELL=(RULES.feel.sellHoldSeconds||.5)*1000,SELL_MS=(RULES.feel.sellConfirmSeconds||2.6)*1000;
 const dragRows=()=>[...document.querySelectorAll('li.aug[data-drag]')];
+function dragGhost(row,px,py){
+ const r=row.getBoundingClientRect(),wrap=document.createElement('ol'),c=row.cloneNode(true);
+ c.removeAttribute('data-drag');c.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));c.classList.remove('tilting');c.style.transform='';c.style.transformOrigin=(px-r.left)+'px '+(py-r.top)+'px';   // shrinks around the pointer over the needle
+ wrap.className='augs drag-ghost';wrap.setAttribute('aria-hidden','true');wrap.style.left=r.left+'px';wrap.style.top=r.top+'px';wrap.style.width=r.width+'px';
+ wrap.appendChild(c);document.body.appendChild(wrap);return wrap}
 const refreshPreview=()=>previewFight();   // a changed loadout changes the warm-up ball too
 function endPress(){if(press){clearTimeout(press.t);press=null}}
 document.addEventListener('pointerdown',e=>{
@@ -724,14 +753,18 @@ document.addEventListener('pointermove',e=>{
  if(press&&e.pointerId===press.id&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>10)endPress();
  if(!drag||e.pointerId!==drag.id)return;
  const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
- if(!drag.on){if(Math.hypot(dx,dy)<6)return;drag.on=true;drag.row.classList.add('dragging');document.body.classList.add('drag-active');hideTip()}
+ if(!drag.on){if(Math.hypot(dx,dy)<6)return;drag.on=true;drag.ghost=dragGhost(drag.row,drag.x0,drag.y0);drag.card=drag.ghost.firstChild;drag.card.classList.add('dragging');drag.row.classList.add('drag-src');
+  document.body.classList.add('drag-active');hideTip();if(shopview.hidden&&G.phase==='prep'){shopview.hidden=false;drag.opened=true}}
  e.preventDefault();
  // over the needle (with a little slack): armed to sell
  const bin=$('#sellbin');let over=false;
  if(bin){const b=bin.getBoundingClientRect(),m=16;over=e.clientX>=b.left-m&&e.clientX<=b.right+m&&e.clientY>=b.top-m&&e.clientY<=b.bottom+m}
- if(over!==drag.sell){drag.sell=over;bin.classList.toggle('armed',over);drag.row.classList.toggle('selling',over);
-  const a=G.run.augs[drag.i],p=$('#sellbin-price');if(p&&a)p.textContent='+$'+sellValue(G.run,a.id)}
- drag.row.style.transform='translate('+dx+'px,'+dy+'px)'+(over?' rotate(-5deg) scale(.86)':'');
+ if(over!==drag.sell){drag.sell=over;bin.classList.toggle('armed',over);drag.card.classList.toggle('selling',over);
+  const a=G.run.augs[drag.i];   // the sale price, under the needle and above the dragged card (a page-level label, like the card copy)
+  if(over&&a){if(!drag.tag){drag.tag=document.createElement('b');drag.tag.className='sell-tag';document.body.appendChild(drag.tag)}
+   const r=bin.getBoundingClientRect();drag.tag.textContent='+$'+sellValue(G.run,a.id);drag.tag.style.left=(r.left+r.width/2)+'px';drag.tag.style.top=(r.bottom+8)+'px';drag.tag.hidden=false}
+  else if(drag.tag)drag.tag.hidden=true}
+ drag.card.style.transform='translate('+dx+'px,'+dy+'px)'+(over?' rotate(-6deg) scale(.5)':'');
  // otherwise the new socket is the number of other rows whose middle is above the pointer
  const others=dragRows().filter(r=>r!==drag.row);let to=0;
  for(const r of others){const b=r.getBoundingClientRect();if(e.clientY>b.top+b.height/2)to++}
@@ -742,11 +775,11 @@ document.addEventListener('pointermove',e=>{
 function endDrag(e,cancel){
  endPress();
  if(!drag||(e&&e.pointerId!==drag.id))return;
- const d=drag,bin=$('#sellbin');drag=null;document.body.classList.remove('drag-active');
+ const d=drag,bin=$('#sellbin');drag=null;document.body.classList.remove('drag-active');if(d.ghost)d.ghost.parentNode.removeChild(d.ghost);if(d.tag)d.tag.parentNode.removeChild(d.tag);
  if(d.on&&!cancel&&d.sell){const r=(bin||d.row).getBoundingClientRect();
   if(sellAug(G.run,d.i)){sellFx(r.left+r.width/2,r.top+r.height/2);refreshPreview();render();return}}
  if(d.on&&!cancel&&d.to!=null&&moveAugTo(G.run,d.i,d.to)){audioOn();play('coin');render();return}
- d.row.classList.remove('dragging','selling');d.row.style.transform='';if(bin)bin.classList.remove('armed');for(const r of dragRows())r.classList.remove('drop-above','drop-below');
+ d.row.classList.remove('drag-src');if(bin)bin.classList.remove('armed');if(d.opened)shopview.hidden=G.view==='arena';for(const r of dragRows())r.classList.remove('drop-above','drop-below');
 }
 document.addEventListener('pointerup',e=>endDrag(e,false));
 document.addEventListener('pointercancel',e=>endDrag(e,true));
@@ -994,8 +1027,22 @@ function drawWeapon(b,w){
  else if(w.type==='dagger'){ctx.fillStyle=C.blade;ctx.beginPath();ctx.moveTo(r-1,-3.4);ctx.lineTo(e,0);ctx.lineTo(r-1,3.4);ctx.closePath();ctx.fill();ctx.stroke()}
  else if(w.type==='spear'){ctx.fillStyle=C.shaft;ctx.fillRect(r-2,-1.8,w.len-9,3.6);ctx.strokeRect(r-2,-1.8,w.len-9,3.6);
   ctx.fillStyle=C.blade;ctx.beginPath();ctx.moveTo(e-13,-5);ctx.lineTo(e,0);ctx.lineTo(e-13,5);ctx.closePath();ctx.fill();ctx.stroke()}
- else if(w.type==='hammer'){ctx.fillStyle=C.shaft;ctx.fillRect(r-2,-2.4,w.len-12,4.8);ctx.strokeRect(r-2,-2.4,w.len-12,4.8);
-  ctx.fillStyle=C.hammerHead;ctx.fillRect(e-16,-12,16,24);ctx.strokeRect(e-16,-12,16,24)}
+ else if(w.type==='hammer'){const k=Math.max(1,(w.th||9)/9);   // thicker hammers (The Bulwark, The Gavel) get a bigger head
+  ctx.fillStyle=C.shaft;ctx.fillRect(r-2,-2.4*k,w.len-16*k+4,4.8*k);ctx.strokeRect(r-2,-2.4*k,w.len-16*k+4,4.8*k);
+  ctx.fillStyle=C.hammerHead;ctx.fillRect(e-16*k,-12*k,16*k,24*k);ctx.strokeRect(e-16*k,-12*k,16*k,24*k)}
+ else if(w.type==='katana'){   // The Samurai's katana: red-wrapped grip, dark round guard, a long thin blade with a slight curve
+  ctx.fillStyle=C.katanaGrip||'#c1121f';ctx.fillRect(r-2,-2.4,12,4.8);ctx.strokeRect(r-2,-2.4,12,4.8);
+  ctx.fillStyle=C.katanaGuard||'#1b1b1f';ctx.beginPath();ctx.ellipse(r+11,0,2.6,6.5,0,0,TAU);ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.katana||C.blade;ctx.beginPath();ctx.moveTo(r+13,-2.6);ctx.quadraticCurveTo((r+13+e)/2,-4.6,e,-3.2);ctx.lineTo(e-5,1.2);ctx.quadraticCurveTo((r+13+e)/2,-.6,r+13,2.2);ctx.closePath();ctx.fill();ctx.stroke()}
+ else if(w.type==='clockarm'){   // The Clockwork's hands. hour and minute: ornate brass pixel sprites (assets.images.weapons.clockHour / clockMinute, from tools/clock-hands.py);
+  const hd=w.hand||'hour',g=C.clockarm||'#c9a227';ctx.lineWidth=2;ctx.strokeStyle=INK;   // second: a thin red line with a small round base, running off the arena
+  const hi=IMG['weapon.'+(hd==='minute'?'clockMinute':'clockHour')];
+  if(hd==='second'){const red=C.clockSecond||'#e63946',b0=r+4;ctx.fillStyle=INK;ctx.fillRect(b0,-2.5,w.len,5);ctx.fillStyle=red;ctx.fillRect(b0,-1.5,w.len,3);
+   ctx.beginPath();ctx.arc(b0,0,5.5,0,TAU);ctx.fillStyle=red;ctx.fill();ctx.stroke();ctx.fillStyle=INK;ctx.fillRect(b0-1.5,-1.5,3,3)}
+  else if(hi){const L=e-(r-2),h=L*hi.height/hi.width;ctx.drawImage(hi,r-2,-h/2,L,h)}
+  else if(hd==='minute'){ctx.fillStyle=g;ctx.fillRect(r-2,-2.4,w.len-12,4.8);ctx.strokeRect(r-2,-2.4,w.len-12,4.8);
+   ctx.beginPath();ctx.moveTo(e-16,-7);ctx.lineTo(e,0);ctx.lineTo(e-16,7);ctx.lineTo(e-12,0);ctx.closePath();ctx.fill();ctx.stroke()}
+  else{ctx.fillStyle=g;ctx.fillRect(r-2,-4,w.len-8,8);ctx.strokeRect(r-2,-4,w.len-8,8)}}
  else if(w.type==='bow'){ctx.lineWidth=5;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(r-6,0,16,-1.15,1.15);ctx.stroke();ctx.lineWidth=2.6;ctx.strokeStyle=C.bow;ctx.beginPath();ctx.arc(r-6,0,16,-1.15,1.15);ctx.stroke();
   ctx.lineWidth=1;ctx.strokeStyle=TH.page.chalk;ctx.beginPath();ctx.moveTo(r-6+16*Math.cos(1.15),-16*Math.sin(1.15));ctx.lineTo(r-6+16*Math.cos(1.15),16*Math.sin(1.15));ctx.stroke()}
  else if(w.type==='shield'){const h=(w.len/2)/(r+7);ctx.lineCap='round';ctx.lineWidth=9;ctx.strokeStyle=INK;ctx.beginPath();ctx.arc(0,0,r+7,-h,h);ctx.stroke();ctx.lineWidth=6;ctx.strokeStyle=C.shield;ctx.beginPath();ctx.arc(0,0,r+7,-h,h);ctx.stroke()}
@@ -1236,7 +1283,9 @@ function draw(dt){
  else{drawShadows(S,ctx);for(const b of S.balls)if(b.alive&&!IMG['ball.'+b.kind])drawBody(b,dt,ctx,b._sh)}
  for(const b of S.balls){if(!b.alive)continue;drawTop(b,S);for(const w of b.ws)drawWeapon(b,w)}
  for(const p of S.projs){const im=IMG[p.team===0?'proj.player':'proj.enemy'];ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.ang||0);
-  if(im){const L=14,h=L*im.height/im.width;ctx.drawImage(im,-L/2,-h/2,L,h)}
+  if(p.bolt){const c=TH.weapons.lightning||TH.effects.lightning||'#ffe66d';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(-12,-3);ctx.lineTo(-4,2);ctx.lineTo(0,-2);ctx.lineTo(8,3);ctx.lineTo(12,0);
+   ctx.lineWidth=6;ctx.strokeStyle=INK;ctx.stroke();ctx.lineWidth=3;ctx.strokeStyle=c;ctx.stroke();ctx.fillStyle=c;ctx.beginPath();ctx.arc(12,0,3.4,0,TAU);ctx.fill()}   // The Storm's lightning arrow
+  else if(im){const L=14,h=L*im.height/im.width;ctx.drawImage(im,-L/2,-h/2,L,h)}
   else{ctx.fillStyle=p.team===0?TH.projectiles.player:TH.projectiles.enemy;ctx.strokeStyle=INK;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(-5,-3);ctx.lineTo(-5,3);ctx.closePath();ctx.fill();ctx.stroke()}
   ctx.restore()}
  drawLightPass();
@@ -1263,7 +1312,8 @@ const clampX=x=>clamp(x,14,AW-14);
 /* Updates the few HTML bits that change during a fight: the Power × Mult readout, HP bar, ramp line, augment flashes. */
 function liveDom(){
  const S=G.S;if(!S||S.preview||!['fight','payout','over','victory'].includes(G.phase))return;
- if(G.phase==='fight'&&S.last&&S.last.n!==lastN){lastN=S.last.n;const L=S.last;const rp=$('#roP'),rm=$('#roM'),d=$('#roD');if(rp)rp.textContent=num(L.p);if(rm)rm.textContent='×'+num(L.m);if(d){d.textContent=fmt(L.d)+(L.c?'!':'')}
+ if(G.phase==='fight'&&S.last&&S.last.n!==lastN){lastN=S.last.n;const L=S.last;const rp=$('#roP'),rm=$('#roM'),d=$('#roD');if(rp)rp.textContent=num(L.p);if(rm)rm.textContent='×'+num(L.m);if(d){d.textContent=fmt(L.d)+(L.c?'!':'');const box=d.closest('.ro');   // the Last hit box lights up gold on every hit (brighter, with a pop, on a crit)
+   if(box){box.classList.remove('hot','hotc');void box.offsetWidth;box.classList.add(L.c?'hotc':'hot');clearTimeout(box._ht);box._ht=setTimeout(()=>box.classList.remove('hot','hotc'),L.c?220:140)}}
   if(d&&!reduce){d.classList.remove('bump');void d.offsetWidth;d.classList.add('bump')}}
  if(++liveTick%4)return;
  const run=G.run,p=S.player,hf=$('#hpfill');
